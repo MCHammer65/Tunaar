@@ -24,6 +24,8 @@ ENV TUNAAR_CONFIG=/config/config.json
 VOLUME ["/config"]
 
 EXPOSE 5004
+# HDHomeRun discovery (host networking required for broadcast to reach it).
+EXPOSE 65001/udp
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5004/healthz')" || exit 1
