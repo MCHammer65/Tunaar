@@ -1,12 +1,16 @@
 services:
   tunaar:
-    build: .
-    image: tunaar:latest
+    # Pre-built multi-arch image from GitHub Container Registry.
+    image: ghcr.io/mchammer65/plexiptv:latest
+    # To build from source instead, comment out `image` above and uncomment:
+    # build: .
     container_name: tunaar
     restart: unless-stopped
-    # host networking lets Plex auto-discover the tuner on your LAN.
-    # Comment this out and use the ports mapping below if you prefer.
+    # Host networking lets Plex reach the tuner directly on your LAN and keeps
+    # the advertised stream URLs correct. Works on QNAP / Linux hosts.
     network_mode: host
+    # On Docker Desktop (Mac/Windows) host mode is limited — comment the line
+    # above and use an explicit port mapping instead:
     # ports:
     #   - "5004:5004"
     volumes:
