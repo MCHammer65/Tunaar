@@ -31,14 +31,25 @@ def _base_url(config: Config) -> str:
 
 
 class ChannelCache:
-    """Thread-safe cache of the parsed playlist."""
+    """Thread-safe cache of the merged, group-filtered playlist."""
 
     def __init__(self, config: Config) -> None:
         self._config = config
         self._lock = threading.Lock()
         self._channels: list[m3u.Channel] = []
+        self._all_groups: list[str] = []
+        self._discovered_epg: list[str] = []
         self._fetched_at = 0.0
         self._error: str | None = None
+
+    def _passes_group_filter(self, group: str) -> bool:
+        inc = self._config.groups_include
+        exc = self._config.groups_exclude
+        if inc and group not in inc:
+            return False
+        if group in exc:
+            return False
+        return True
 
     def get(self) -> list[m3u.Channel]:
         with self._lock:
@@ -46,9 +57,16 @@ class ChannelCache:
             if self._channels and not stale:
                 return self._channels
             try:
-                self._channels = m3u.load(
-                    self._config.playlist, user_agent=self._config.user_agent
+                playlist = m3u.load_sources(
+                    self._config.sources, user_agent=self._config.user_agent
                 )
+                self._all_groups = sorted({c.group for c in playlist.channels})
+                self._discovered_epg = playlist.epg_urls
+                kept = [
+                    c for c in playlist.channels if self._passes_group_filter(c.group)
+                ]
+                m3u.assign_numbers(kept)
+                self._channels = kept
                 self._fetched_at = time.monotonic()
                 self._error = None
             except Exception as exc:  # noqa: BLE001 - surfaced on dashboard
@@ -57,6 +75,20 @@ class ChannelCache:
 
     def by_number(self, number: str) -> m3u.Channel | None:
         return next((c for c in self.get() if c.number == number), None)
+
+    def invalidate(self) -> None:
+        with self._lock:
+            self._fetched_at = 0.0
+
+    @property
+    def all_groups(self) -> list[str]:
+        self.get()
+        return self._all_groups
+
+    @property
+    def discovered_epg(self) -> list[str]:
+        self.get()
+        return self._discovered_epg
 
     @property
     def error(self) -> str | None:
@@ -74,22 +106,30 @@ class EpgCache:
         self._fetched_at = 0.0
         self._error: str | None = None
         self._matched = 0
+        self._sources_used = 0
 
     def get(self) -> epg.EpgResult:
         with self._lock:
             stale = (time.monotonic() - self._fetched_at) > self._config.epg_refresh
             if self._result is not None and not stale:
                 return self._result
-            if not self._config.epg_url:
+
+            urls = self._config.effective_epg_urls(self._channels.discovered_epg)
+            self._sources_used = len(urls)
+            if not urls:
                 self._result = epg.EpgResult(epg.EMPTY_XMLTV, set(), 0)
+                self._matched = 0
+                self._fetched_at = time.monotonic()
                 return self._result
             try:
-                raw = epg.fetch(self._config.epg_url, user_agent=self._config.user_agent)
-                keep = None
-                if self._config.filter_epg_to_lineup:
-                    keep = {c.tvg_id for c in self._channels.get() if c.tvg_id}
-                self._result = epg.build(raw, keep_ids=keep)
+                raw_docs = []
+                for url in urls:
+                    raw_docs.append(
+                        epg.fetch(url, user_agent=self._config.user_agent)
+                    )
                 lineup_ids = {c.tvg_id for c in self._channels.get() if c.tvg_id}
+                keep = lineup_ids if self._config.filter_epg_to_lineup else None
+                self._result = epg.build_many(raw_docs, keep_ids=keep)
                 self._matched = len(lineup_ids & self._result.channel_ids)
                 self._fetched_at = time.monotonic()
                 self._error = None
@@ -99,9 +139,17 @@ class EpgCache:
                     self._result = epg.EpgResult(epg.EMPTY_XMLTV, set(), 0)
             return self._result
 
+    def invalidate(self) -> None:
+        with self._lock:
+            self._fetched_at = 0.0
+
     @property
     def matched(self) -> int:
         return self._matched
+
+    @property
+    def sources_used(self) -> int:
+        return getattr(self, "_sources_used", 0)
 
     @property
     def error(self) -> str | None:
@@ -259,11 +307,14 @@ def create_app(config: Config | None = None) -> Flask:
                 "channels": len(chans),
                 "playlist_error": channels.error,
                 "epg": {
-                    "configured": bool(config.epg_url),
+                    "configured": guide.sources_used > 0,
+                    "sources": guide.sources_used,
+                    "auto": config.epg_auto,
                     "matched": guide.matched,
                     "programmes": epg_result.programme_count,
                     "error": guide.error,
                 },
+                "groups": len(channels.all_groups),
                 "tuners": {
                     "capacity": config.tuner_count,
                     "in_use": tuners.in_use,
@@ -282,10 +333,95 @@ def create_app(config: Config | None = None) -> Flask:
                     "group": ch.group,
                     "logo": ch.logo,
                     "tvg_id": ch.tvg_id,
+                    "source": ch.source,
                 }
                 for ch in channels.get()
             ]
         )
+
+    # -- Management API ---------------------------------------------------
+
+    def _refresh() -> None:
+        channels.invalidate()
+        guide.invalidate()
+
+    def _save_and_refresh() -> None:
+        try:
+            config.save()
+        except OSError:
+            pass  # read-only config dir: changes still apply for this run
+        _refresh()
+
+    @app.get("/api/config")
+    def api_config() -> Response:
+        return jsonify(
+            {
+                "sources": config.sources,
+                "epg_urls": config.epg_urls,
+                "epg_auto": config.epg_auto,
+                "discovered_epg": channels.discovered_epg,
+                "groups_include": config.groups_include,
+                "groups_exclude": config.groups_exclude,
+                "all_groups": channels.all_groups,
+            }
+        )
+
+    @app.post("/api/sources")
+    def api_add_source() -> Response:
+        body = request.get_json(silent=True) or {}
+        url = (body.get("url") or "").strip()
+        if not url:
+            return jsonify({"error": "url is required"}), 400
+        config.sources.append(
+            {
+                "name": (body.get("name") or "").strip(),
+                "url": url,
+                "group": (body.get("group") or "").strip(),
+            }
+        )
+        _save_and_refresh()
+        return jsonify({"ok": True, "sources": config.sources})
+
+    @app.delete("/api/sources/<int:index>")
+    def api_remove_source(index: int) -> Response:
+        if 0 <= index < len(config.sources):
+            config.sources.pop(index)
+            _save_and_refresh()
+            return jsonify({"ok": True, "sources": config.sources})
+        return jsonify({"error": "index out of range"}), 404
+
+    @app.post("/api/epg")
+    def api_set_epg() -> Response:
+        body = request.get_json(silent=True) or {}
+        if "epg_auto" in body:
+            config.epg_auto = bool(body["epg_auto"])
+        if "epg_urls" in body and isinstance(body["epg_urls"], list):
+            config.epg_urls = [str(u).strip() for u in body["epg_urls"] if str(u).strip()]
+        _save_and_refresh()
+        return jsonify(
+            {"ok": True, "epg_urls": config.epg_urls, "epg_auto": config.epg_auto}
+        )
+
+    @app.post("/api/groups")
+    def api_set_groups() -> Response:
+        body = request.get_json(silent=True) or {}
+        if "include" in body and isinstance(body["include"], list):
+            config.groups_include = [str(g) for g in body["include"]]
+        if "exclude" in body and isinstance(body["exclude"], list):
+            config.groups_exclude = [str(g) for g in body["exclude"]]
+        _save_and_refresh()
+        return jsonify(
+            {
+                "ok": True,
+                "groups_include": config.groups_include,
+                "groups_exclude": config.groups_exclude,
+            }
+        )
+
+    @app.post("/api/refresh")
+    def api_refresh() -> Response:
+        _refresh()
+        return jsonify({"ok": True})
 
     @app.get("/healthz")
     def healthz() -> Response:

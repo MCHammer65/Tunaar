@@ -5,5 +5,5 @@ Jellyfin) can consume an IPTV M3U playlist as Live TV, with XMLTV guide data
 and ffmpeg-backed stream remuxing for reliable playback.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 APP_NAME = "Tunaar"

@@ -10,6 +10,8 @@ import requests
 _ATTR_RE = re.compile(r'([\w-]+)="([^"]*)"')
 _EXTINF_RE = re.compile(r"#EXTINF:-?\d+\s*(?P<attrs>.*?),(?P<name>.*)$")
 
+UNGROUPED = "Undefined"
+
 
 @dataclass
 class Channel:
@@ -21,25 +23,37 @@ class Channel:
     logo: str = ""
     group: str = ""
     tvg_id: str = ""
+    source: str = ""
     attrs: dict[str, str] = field(default_factory=dict)
 
 
-def parse(text: str) -> list[Channel]:
-    """Parse extended M3U ``text`` into a list of :class:`Channel`.
+@dataclass
+class Playlist:
+    """Parsed playlist: its channels plus any embedded EPG URLs."""
 
-    Guide numbers come from ``tvg-chno`` when present, otherwise channels are
-    numbered sequentially. Numbers are de-duplicated so each channel is
-    uniquely addressable.
+    channels: list[Channel]
+    epg_urls: list[str] = field(default_factory=list)
+
+
+def parse_document(text: str, *, source: str = "") -> Playlist:
+    """Parse extended M3U ``text`` without assigning channel numbers.
+
+    Also extracts any EPG URL declared in the ``#EXTM3U`` header via the
+    ``url-tvg`` or ``x-tvg-url`` attribute, which most providers include.
     """
     channels: list[Channel] = []
+    epg_urls: list[str] = []
     pending: Channel | None = None
 
     for raw in text.splitlines():
         line = raw.strip()
-        if not line or line == "#EXTM3U":
+        if not line:
             continue
-        if line.startswith("#EXTINF"):
+        if line.startswith("#EXTM3U"):
+            epg_urls.extend(_header_epg_urls(line))
+        elif line.startswith("#EXTINF"):
             pending = _parse_extinf(line)
+            pending.source = source
         elif line.startswith("#"):
             continue  # other directives (#EXTGRP etc.) — ignored
         elif pending is not None:
@@ -47,7 +61,18 @@ def parse(text: str) -> list[Channel]:
             channels.append(pending)
             pending = None
 
-    return _assign_numbers(channels)
+    return Playlist(channels=channels, epg_urls=epg_urls)
+
+
+def parse(text: str) -> list[Channel]:
+    """Parse ``text`` and assign guide numbers (convenience for single lists)."""
+    return assign_numbers(parse_document(text).channels)
+
+
+def _header_epg_urls(line: str) -> list[str]:
+    attrs = dict(_ATTR_RE.findall(line))
+    raw = attrs.get("url-tvg") or attrs.get("x-tvg-url") or ""
+    return [u.strip() for u in raw.split(",") if u.strip()]
 
 
 def _parse_extinf(line: str) -> Channel:
@@ -64,13 +89,14 @@ def _parse_extinf(line: str) -> Channel:
         name=name or attrs.get("tvg-name", "Unknown"),
         url="",
         logo=attrs.get("tvg-logo", ""),
-        group=attrs.get("group-title", ""),
+        group=attrs.get("group-title", "") or UNGROUPED,
         tvg_id=attrs.get("tvg-id", ""),
         attrs=attrs,
     )
 
 
-def _assign_numbers(channels: list[Channel]) -> list[Channel]:
+def assign_numbers(channels: list[Channel]) -> list[Channel]:
+    """Assign collision-free guide numbers, honouring ``tvg-chno`` when set."""
     used: set[str] = set()
     next_auto = 1
 
@@ -87,15 +113,55 @@ def _assign_numbers(channels: list[Channel]) -> list[Channel]:
     return channels
 
 
-def load(source: str, *, user_agent: str = "Tunaar", timeout: int = 30) -> list[Channel]:
-    """Load and parse a playlist from a URL or local file ``source``."""
+def _fetch_text(source: str, *, user_agent: str, timeout: int) -> str:
     if source.startswith(("http://", "https://")):
         resp = requests.get(
             source, timeout=timeout, headers={"User-Agent": user_agent}
         )
         resp.raise_for_status()
-        text = resp.text
-    else:
-        with open(source, "r", encoding="utf-8", errors="replace") as fh:
-            text = fh.read()
+        return resp.text
+    with open(source, "r", encoding="utf-8", errors="replace") as fh:
+        return fh.read()
+
+
+def load(source: str, *, user_agent: str = "Tunaar", timeout: int = 30) -> list[Channel]:
+    """Load and parse a single playlist from a URL or local file."""
+    text = _fetch_text(source, user_agent=user_agent, timeout=timeout)
     return parse(text)
+
+
+def load_sources(
+    sources: list[dict],
+    *,
+    user_agent: str = "Tunaar",
+    timeout: int = 30,
+) -> Playlist:
+    """Load and merge several playlists.
+
+    Each source is a dict with ``url`` (required) and optional ``name`` /
+    ``group`` (a group override applied to all of that source's channels).
+    Numbers are assigned across the merged set so every channel is unique, and
+    embedded EPG URLs from all sources are collected.
+    """
+    merged: list[Channel] = []
+    epg_urls: list[str] = []
+
+    for src in sources:
+        url = (src.get("url") or "").strip()
+        if not url:
+            continue
+        name = src.get("name") or url
+        text = _fetch_text(url, user_agent=user_agent, timeout=timeout)
+        doc = parse_document(text, source=name)
+        override = (src.get("group") or "").strip()
+        if override:
+            for ch in doc.channels:
+                ch.group = override
+        merged.extend(doc.channels)
+        epg_urls.extend(doc.epg_urls)
+
+    assign_numbers(merged)
+    # De-duplicate EPG URLs, preserving order.
+    seen: set[str] = set()
+    unique_epg = [u for u in epg_urls if not (u in seen or seen.add(u))]
+    return Playlist(channels=merged, epg_urls=unique_epg)
