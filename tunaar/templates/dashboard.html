@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ name }} — IPTV for Plex</title>
+  <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <img src="{{ url_for('static', filename='logo.svg') }}" alt="{{ name }} logo">
+    <div>
+      <div class="title"><span>{{ name }}</span><span class="ver">v{{ version }}</span></div>
+      <div style="color:var(--muted);font-size:13px">IPTV → Plex tuner bridge</div>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner" class="banner"></div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="label">Channels</div>
+        <div class="value" id="channels">—</div>
+        <div class="sub" id="playlist-sub">from playlist</div>
+      </div>
+      <div class="card">
+        <div class="label">Tuners</div>
+        <div class="value" id="tuners">—</div>
+        <div class="sub">in use / capacity</div>
+      </div>
+      <div class="card">
+        <div class="label">EPG</div>
+        <div class="value" id="epg">—</div>
+        <div class="sub" id="epg-sub">channels matched</div>
+      </div>
+      <div class="card">
+        <div class="label">Stream mode</div>
+        <div class="value" id="mode" style="font-size:20px">—</div>
+        <div class="sub" id="ffmpeg-sub"></div>
+      </div>
+    </div>
+
+    <div class="section-title">Plex endpoints</div>
+    <div class="endpoints">
+      <a href="/discover.json">discover.json</a>
+      <a href="/lineup.json">lineup.json</a>
+      <a href="/lineup_status.json">lineup_status.json</a>
+      <a href="/epg.xml">epg.xml</a>
+      <a href="/device.xml">device.xml</a>
+    </div>
+
+    <div class="section-title">Active tuners</div>
+    <table>
+      <thead><tr><th>#</th><th>Channel</th><th>Name</th><th>Uptime</th></tr></thead>
+      <tbody id="active"><tr><td colspan="4" style="color:var(--muted)">none</td></tr></tbody>
+    </table>
+
+    <div class="section-title">Channels</div>
+    <table>
+      <thead><tr><th>No.</th><th>Logo</th><th>Name</th><th>Group</th><th>tvg-id</th></tr></thead>
+      <tbody id="channel-rows"><tr><td colspan="5" style="color:var(--muted)">loading…</td></tr></tbody>
+    </table>
+  </main>
+
+  <footer>{{ name }} — a single-container IPTV bridge for Plex, Emby &amp; Jellyfin.</footer>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function dot(state) {
+      const cls = state === 'ok' ? 'ok' : state === 'warn' ? 'warn' : 'err';
+      return `<span class="dot ${cls}"></span>`;
+    }
+
+    async function refreshStatus() {
+      try {
+        const s = await (await fetch('/api/status')).json();
+        $('channels').textContent = s.channels;
+        $('tuners').textContent = `${s.tuners.in_use} / ${s.tuners.capacity}`;
+        $('mode').textContent = s.stream_mode;
+        $('ffmpeg-sub').innerHTML = s.stream_mode === 'ffmpeg'
+          ? dot(s.ffmpeg ? 'ok' : 'err') + (s.ffmpeg ? 'ffmpeg ready' : 'ffmpeg missing')
+          : '';
+        $('epg').textContent = s.epg.configured ? s.epg.matched : 'off';
+        $('epg-sub').textContent = s.epg.configured
+          ? `${s.epg.programmes} programmes` : 'not configured';
+
+        const banner = $('banner');
+        const errs = [];
+        if (s.playlist_error) errs.push('Playlist: ' + s.playlist_error);
+        if (s.epg.error) errs.push('EPG: ' + s.epg.error);
+        if (errs.length) { banner.style.display = 'block'; banner.textContent = errs.join('  •  '); }
+        else banner.style.display = 'none';
+
+        const active = $('active');
+        if (!s.tuners.active.length) {
+          active.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">none</td></tr>';
+        } else {
+          active.innerHTML = s.tuners.active.map(t =>
+            `<tr><td>${t.id}</td><td><span class="num">${t.channel}</span></td><td>${t.name}</td><td>${t.uptime}s</td></tr>`
+          ).join('');
+        }
+      } catch (e) { /* transient */ }
+    }
+
+    async function loadChannels() {
+      try {
+        const rows = await (await fetch('/api/channels')).json();
+        const body = $('channel-rows');
+        if (!rows.length) { body.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">no channels</td></tr>'; return; }
+        body.innerHTML = rows.map(c =>
+          `<tr><td><span class="num">${c.number}</span></td>` +
+          `<td>${c.logo ? `<img class="chlogo" src="${c.logo}" onerror="this.remove()">` : ''}</td>` +
+          `<td>${c.name}</td><td>${c.group || ''}</td><td style="color:var(--muted)">${c.tvg_id || ''}</td></tr>`
+        ).join('');
+      } catch (e) { /* transient */ }
+    }
+
+    refreshStatus(); loadChannels();
+    setInterval(refreshStatus, 4000);
+  </script>
+</body>
+</html>

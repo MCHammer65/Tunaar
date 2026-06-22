@@ -1,0 +1,15 @@
+services:
+  tunaar:
+    build: .
+    image: tunaar:latest
+    container_name: tunaar
+    restart: unless-stopped
+    # host networking lets Plex auto-discover the tuner on your LAN.
+    # Comment this out and use the ports mapping below if you prefer.
+    network_mode: host
+    # ports:
+    #   - "5004:5004"
+    volumes:
+      - ./config:/config
+    environment:
+      - TUNAAR_CONFIG=/config/config.json
