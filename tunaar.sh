@@ -13,7 +13,8 @@
 #   TUNAAR_EPG_URL   optional XMLTV guide URL
 #   TUNAAR_IMAGE     image ref (default ghcr.io/mchammer65/plexiptv:latest)
 #   TUNAAR_PORT      host port for the dashboard (default 5004)
-#   TUNAAR_VOLUME    named volume for persisted config (default tunaar-config)
+#   TUNAAR_VOLUME    config volume: a named volume (default tunaar-config) or an
+#                    absolute host path for a bind mount, e.g. /share/.../config
 #   TUNAAR_NETWORK   "host" (default) or "bridge" (uses -p PORT:5004)
 
 set -eu
@@ -23,7 +24,9 @@ NAME="tunaar"
 PORT="${TUNAAR_PORT:-5004}"
 VOLUME="${TUNAAR_VOLUME:-tunaar-config}"
 NETWORK="${TUNAAR_NETWORK:-host}"
-PLAYLIST="${TUNAAR_PLAYLIST:-https://iptv-org.github.io/iptv/index.m3u}"
+# Only forces the playlist if you set TUNAAR_PLAYLIST; otherwise the value in
+# the mounted config.json (or the dashboard) is used and left untouched.
+PLAYLIST="${TUNAAR_PLAYLIST:-}"
 
 log() { printf '\033[1;33m[tunaar]\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31m[tunaar] %s\033[0m\n' "$*" >&2; exit 1; }
@@ -33,9 +36,8 @@ command -v docker >/dev/null 2>&1 || die "docker not found on PATH"
 run_container() {
   docker rm -f "$NAME" >/dev/null 2>&1 || true
 
-  set -- -d --name "$NAME" --restart unless-stopped \
-    -e "TUNAAR_PLAYLIST=$PLAYLIST" \
-    -v "$VOLUME:/config"
+  set -- -d --name "$NAME" --restart unless-stopped -v "$VOLUME:/config"
+  [ -n "$PLAYLIST" ] && set -- "$@" -e "TUNAAR_PLAYLIST=$PLAYLIST"
   [ -n "${TUNAAR_EPG_URL:-}" ] && set -- "$@" -e "TUNAAR_EPG_URL=$TUNAAR_EPG_URL"
 
   if [ "$NETWORK" = "host" ]; then
