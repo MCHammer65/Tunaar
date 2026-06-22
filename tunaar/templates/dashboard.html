@@ -6,6 +6,14 @@
   <title>{{ name }} — IPTV for Plex</title>
   <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script>
+    // Apply saved theme before first paint to avoid a flash.
+    (function () {
+      var saved = localStorage.getItem('tunaar-theme');
+      if (!saved) saved = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+    })();
+  </script>
 </head>
 <body>
   <header>
@@ -14,6 +22,9 @@
       <div class="title"><span>{{ name }}</span><span class="ver">v{{ version }}</span></div>
       <div style="color:var(--muted);font-size:13px">IPTV → Plex tuner bridge</div>
     </div>
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">
+      <span class="icon" id="theme-icon">🌙</span><span id="theme-label">Dark</span>
+    </button>
   </header>
 
   <main>
@@ -68,6 +79,19 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('tunaar-theme', theme);
+      const light = theme === 'light';
+      $('theme-icon').textContent = light ? '☀️' : '🌙';
+      $('theme-label').textContent = light ? 'Light' : 'Dark';
+    }
+    applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+    $('theme-toggle').addEventListener('click', () => {
+      const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      applyTheme(next);
+    });
 
     function dot(state) {
       const cls = state === 'ok' ? 'ok' : state === 'warn' ? 'warn' : 'err';
