@@ -38,6 +38,8 @@ DEFAULTS: dict = {
     "epg_refresh": 3600,  # seconds
     "filter_epg_to_lineup": True,
     "ffmpeg_path": "ffmpeg",
+    "discovery": True,  # answer HDHomeRun discovery so Plex auto-finds the tuner
+    "discovery_port": 65001,
 }
 
 # Managed as structured lists via the dashboard, not via env vars.
@@ -95,6 +97,8 @@ class Config:
     epg_refresh: int = DEFAULTS["epg_refresh"]
     filter_epg_to_lineup: bool = DEFAULTS["filter_epg_to_lineup"]
     ffmpeg_path: str = DEFAULTS["ffmpeg_path"]
+    discovery: bool = DEFAULTS["discovery"]
+    discovery_port: int = DEFAULTS["discovery_port"]
 
     path: str = field(default="config.json", repr=False, compare=False)
 

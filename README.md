@@ -31,6 +31,8 @@ on being **robust and effortless**:
   per-source group overrides supported.
 - 🖥️ **Editable dashboard.** Add sources, set EPG URLs, and choose groups right
   in the web UI — changes persist to config, no SSH required.
+- 🔎 **Auto-discovery.** Answers HDHomeRun discovery (UDP 65001) so Plex finds
+  the tuner automatically — no manual IP entry.
 - 🛡️ **Config that can't corrupt.** Written atomically and validated on load.
 
 ## Quick start (Docker)
@@ -107,11 +109,14 @@ to direct passthrough if it isn't).
 ## Add the tuner in Plex
 
 1. **Settings → Live TV & DVR → Set up Plex DVR.**
-2. Tunaar doesn't yet broadcast for auto-discovery, so click **"Don't see your
-   HDHomeRun? Enter its network address manually"** and enter your host, e.g.
-   `192.168.1.50:5004`.
+2. Tunaar answers HDHomeRun discovery (UDP 65001), so it should appear
+   automatically. If it doesn't (e.g. Plex is on another subnet), click
+   **"Enter its network address manually"** and enter `192.168.1.50:5004`.
 3. Map channels. For the guide, choose **"Have an XMLTV file?"** and point Plex at
    `http://192.168.1.50:5004/epg.xml` (or use Plex's own guide and let it match).
+
+> Auto-discovery needs the container on **host networking** (the default) so the
+> broadcast reaches it. Disable it with `TUNAAR_DISCOVERY=false` if needed.
 
 Emby/Jellyfin: add an **M3U Tuner** at `…/lineup.json` (or an HDHomeRun device)
 and an **XMLTV** guide at `…/epg.xml`.
