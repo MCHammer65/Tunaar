@@ -120,3 +120,34 @@ td img.chlogo { height: 22px; vertical-align: middle; }
 .theme-toggle .icon { font-size: 15px; line-height: 1; }
 
 footer { color: var(--muted); font-size: 12px; text-align: center; padding: 30px; }
+
+/* ---- Settings panel ---- */
+.section-head { display: flex; align-items: center; justify-content: space-between; margin: 22px 0 10px; }
+.btn-ghost { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 5px 12px; font-size: 12px; cursor: pointer; }
+.btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+
+.settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 8px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+.panel h3 { margin: 0 0 6px; font-size: 15px; }
+.hint { color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
+.hint code, .panel code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; }
+
+.form-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.inp { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 13px; width: 100%; font-family: inherit; }
+.inp:focus { outline: none; border-color: var(--accent); }
+textarea.inp { resize: vertical; }
+
+.btn { background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #11151c; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.btn:hover { filter: brightness(1.07); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+.chip em { color: var(--accent-2); font-style: normal; }
+.chip a.x { color: var(--err); cursor: pointer; margin-left: 4px; font-weight: 700; }
+
+.switch { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.switch input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+.group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; max-height: 220px; overflow: auto; }
+.grp { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
+.grp input { accent-color: var(--accent); }

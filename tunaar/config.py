@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import uuid
 from dataclasses import asdict, dataclass, field, fields
@@ -22,8 +23,13 @@ DEFAULTS: dict = {
     "tuner_count": 4,
     "host": "0.0.0.0",
     "port": 5004,
-    "playlist": "",
-    "epg_url": "",
+    "playlist": "",  # legacy single source; folded into `sources` on load
+    "sources": [],  # [{"name": str, "url": str, "group": optional override}]
+    "epg_url": "",  # legacy; folded into `epg_urls` on load
+    "epg_urls": [],  # extra XMLTV URLs, merged together
+    "epg_auto": True,  # also use EPG URLs embedded in the playlist header
+    "groups_include": [],  # if non-empty, only these groups are exposed
+    "groups_exclude": [],  # these groups are always hidden
     "advertised_url": None,
     "stream_mode": "ffmpeg",  # ffmpeg | direct | redirect
     "user_agent": "Tunaar/0.2 (HDHomeRun)",
@@ -34,6 +40,15 @@ DEFAULTS: dict = {
     "ffmpeg_path": "ffmpeg",
 }
 
+# Managed as structured lists via the dashboard, not via env vars.
+_ENV_SKIP = {"sources", "epg_urls"}
+
+
+def _split_list(value: str) -> list[str]:
+    """Split a comma/newline separated string into a clean list."""
+    parts = re.split(r"[,\n]", value)
+    return [p.strip() for p in parts if p.strip()]
+
 
 def _coerce(default, raw: str):
     """Coerce an env-var string to the type of the matching default value."""
@@ -41,6 +56,8 @@ def _coerce(default, raw: str):
         return raw.strip().lower() in ("1", "true", "yes", "on")
     if isinstance(default, int):
         return int(raw)
+    if isinstance(default, list):
+        return [s.strip() for s in raw.split(",") if s.strip()]
     return raw
 
 
@@ -48,6 +65,8 @@ def _env_overrides(env: dict) -> dict:
     """Read TUNAAR_<FIELD> overrides for any known config key (except path)."""
     out: dict = {}
     for key, default in DEFAULTS.items():
+        if key in _ENV_SKIP:
+            continue
         raw = env.get(f"TUNAAR_{key.upper()}")
         if raw is not None and raw != "":
             out[key] = _coerce(default, raw)
@@ -62,7 +81,12 @@ class Config:
     host: str = DEFAULTS["host"]
     port: int = DEFAULTS["port"]
     playlist: str = DEFAULTS["playlist"]
+    sources: list = field(default_factory=list)
     epg_url: str = DEFAULTS["epg_url"]
+    epg_urls: list = field(default_factory=list)
+    epg_auto: bool = DEFAULTS["epg_auto"]
+    groups_include: list = field(default_factory=list)
+    groups_exclude: list = field(default_factory=list)
     advertised_url: str | None = DEFAULTS["advertised_url"]
     stream_mode: str = DEFAULTS["stream_mode"]
     user_agent: str = DEFAULTS["user_agent"]
@@ -91,6 +115,7 @@ class Config:
 
         known = {f.name for f in fields(cls)} - {"path"}
         cfg = cls(**{k: v for k, v in data.items() if k in known}, path=path)
+        cfg.normalize()
         cfg.validate()
 
         # Persist a generated device id so Plex sees a stable tuner identity.
@@ -101,6 +126,25 @@ class Config:
             except OSError:
                 pass  # read-only config dir is fine; id stays for this run
         return cfg
+
+    def normalize(self) -> None:
+        """Fold legacy single-value fields into the canonical list fields."""
+        if not self.sources and self.playlist:
+            self.sources = [
+                {"name": "", "url": u}
+                for u in _split_list(self.playlist)
+            ]
+        if not self.epg_urls and self.epg_url:
+            self.epg_urls = _split_list(self.epg_url)
+
+    def effective_epg_urls(self, discovered: list[str] | None = None) -> list[str]:
+        """All EPG URLs to merge: configured ones plus, when ``epg_auto`` is on,
+        any discovered from playlist headers."""
+        urls = list(self.epg_urls)
+        if self.epg_auto and discovered:
+            urls.extend(discovered)
+        seen: set[str] = set()
+        return [u for u in urls if u and not (u in seen or seen.add(u))]
 
     def validate(self) -> None:
         if self.stream_mode not in VALID_STREAM_MODES:

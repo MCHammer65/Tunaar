@@ -29,6 +29,21 @@ def test_build_filtered_to_lineup():
     assert b"movies.us" not in result.xml
 
 
+def test_build_many_merges_and_dedupes():
+    doc_a = b'<tv><channel id="a"/><programme channel="a"><title>X</title></programme></tv>'
+    doc_b = b'<tv><channel id="a"/><channel id="b"/><programme channel="b"><title>Y</title></programme></tv>'
+    result = epg.build_many([doc_a, doc_b])
+    # channel "a" appears in both but is de-duplicated
+    assert result.channel_ids == {"a", "b"}
+    assert result.programme_count == 2
+
+
+def test_build_many_skips_unparseable_doc():
+    good = b'<tv><channel id="a"/></tv>'
+    result = epg.build_many([b"not xml", good])
+    assert result.channel_ids == {"a"}
+
+
 def test_fetch_handles_gzip(monkeypatch):
     payload = gzip.compress(XMLTV)
 

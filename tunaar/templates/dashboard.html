@@ -53,6 +53,45 @@
       </div>
     </div>
 
+    <div class="section-head">
+      <div class="section-title" style="margin:0">Settings</div>
+      <button id="settings-toggle" class="btn-ghost" type="button">Show ▾</button>
+    </div>
+    <div id="settings" class="settings" hidden>
+
+      <div class="panel">
+        <h3>IPTV sources</h3>
+        <p class="hint">Add one or more M3U playlist URLs. Channels from all sources are merged.</p>
+        <div id="source-list" class="chips"></div>
+        <div class="form-row">
+          <input id="src-name" class="inp" placeholder="Name (optional)" style="flex:0 0 150px">
+          <input id="src-url" class="inp" placeholder="https://provider/playlist.m3u" style="flex:1">
+          <input id="src-group" class="inp" placeholder="Force group (optional)" style="flex:0 0 160px">
+          <button id="src-add" class="btn" type="button">Add</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>EPG / guide</h3>
+        <label class="switch">
+          <input id="epg-auto" type="checkbox">
+          <span>Auto-detect guide from playlist (<code>url-tvg</code>)</span>
+        </label>
+        <p class="hint">Extra XMLTV URLs (one per line) are merged with the auto-detected guide.</p>
+        <textarea id="epg-urls" class="inp" rows="3" placeholder="https://example.com/epg.xml.gz"></textarea>
+        <div id="epg-discovered" class="hint"></div>
+        <div class="form-row"><button id="epg-save" class="btn" type="button">Save EPG</button></div>
+      </div>
+
+      <div class="panel">
+        <h3>Groups</h3>
+        <p class="hint">Tick the groups to expose in Plex. None ticked = all groups.</p>
+        <div id="group-list" class="group-grid"></div>
+        <div class="form-row"><button id="groups-save" class="btn" type="button">Save groups</button></div>
+      </div>
+
+    </div>
+
     <div class="section-title">Plex endpoints</div>
     <div class="endpoints">
       <a href="/discover.json">discover.json</a>
@@ -141,6 +180,76 @@
         ).join('');
       } catch (e) { /* transient */ }
     }
+
+    // ---- Settings panel ----
+    const esc = (s) => (s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+    $('settings-toggle').addEventListener('click', () => {
+      const el = $('settings');
+      el.hidden = !el.hidden;
+      $('settings-toggle').textContent = el.hidden ? 'Show ▾' : 'Hide ▴';
+      if (!el.hidden) loadConfig();
+    });
+
+    async function loadConfig() {
+      let cfg;
+      try { cfg = await (await fetch('/api/config')).json(); } catch (e) { return; }
+
+      // sources
+      const sl = $('source-list');
+      sl.innerHTML = cfg.sources.length
+        ? cfg.sources.map((s, i) =>
+            `<span class="chip">${esc(s.name || s.url)}${s.group ? ` <em>→ ${esc(s.group)}</em>` : ''}` +
+            ` <a data-i="${i}" class="x" title="Remove">✕</a></span>`).join('')
+        : '<span class="hint">No sources yet.</span>';
+      sl.querySelectorAll('a.x').forEach(a => a.addEventListener('click', async () => {
+        await fetch('/api/sources/' + a.dataset.i, { method: 'DELETE' });
+        loadConfig(); afterChange();
+      }));
+
+      // epg
+      $('epg-auto').checked = !!cfg.epg_auto;
+      $('epg-urls').value = (cfg.epg_urls || []).join('\n');
+      $('epg-discovered').innerHTML = (cfg.discovered_epg || []).length
+        ? 'Auto-detected: ' + cfg.discovered_epg.map(esc).join(', ') : '';
+
+      // groups
+      const inc = new Set(cfg.groups_include || []);
+      $('group-list').innerHTML = (cfg.all_groups || []).map(g =>
+        `<label class="grp"><input type="checkbox" value="${esc(g)}" ${inc.has(g) ? 'checked' : ''}> ${esc(g)}</label>`
+      ).join('') || '<span class="hint">No groups loaded yet.</span>';
+    }
+
+    function afterChange() { refreshStatus(); loadChannels(); }
+
+    $('src-add').addEventListener('click', async () => {
+      const url = $('src-url').value.trim();
+      if (!url) return;
+      await fetch('/api/sources', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: $('src-name').value.trim(), url, group: $('src-group').value.trim() })
+      });
+      $('src-name').value = $('src-url').value = $('src-group').value = '';
+      loadConfig(); afterChange();
+    });
+
+    $('epg-save').addEventListener('click', async () => {
+      const urls = $('epg-urls').value.split('\n').map(s => s.trim()).filter(Boolean);
+      await fetch('/api/epg', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ epg_urls: urls, epg_auto: $('epg-auto').checked })
+      });
+      loadConfig(); afterChange();
+    });
+
+    $('groups-save').addEventListener('click', async () => {
+      const include = [...$('group-list').querySelectorAll('input:checked')].map(i => i.value);
+      await fetch('/api/groups', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ include })
+      });
+      afterChange();
+    });
 
     refreshStatus(); loadChannels();
     setInterval(refreshStatus, 4000);

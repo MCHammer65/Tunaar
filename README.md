@@ -22,10 +22,16 @@ on being **robust and effortless**:
 - 🎬 **Reliable streaming.** Each channel is remuxed through ffmpeg
   (`-c copy -f mpegts`, auto-reconnect) into a clean MPEG-TS that players accept
   without the hit-and-miss buffering of bare redirects. HLS sources just work.
-- 🗓️ **EPG built in.** Point it at an XMLTV URL; Tunaar filters the guide to your
-  lineup and serves it at `/epg.xml`.
+- 🗓️ **EPG that just works.** Tunaar auto-detects the guide URL embedded in your
+  playlist (`url-tvg`) and merges in any extra XMLTV URLs you add — no manual
+  channel mapping. Filtered to your lineup and served at `/epg.xml`.
+- ➕ **Multiple IPTV sources.** Add as many M3U playlists as you like (from the
+  dashboard or config); channels are merged with collision-free numbering.
+- 🗂️ **Group control.** Pick which groups appear in Plex from a checklist;
+  per-source group overrides supported.
+- 🖥️ **Editable dashboard.** Add sources, set EPG URLs, and choose groups right
+  in the web UI — changes persist to config, no SSH required.
 - 🛡️ **Config that can't corrupt.** Written atomically and validated on load.
-- 📊 **Clean dashboard.** Live status, channels, and active tuners at a glance.
 
 ## Quick start (Docker)
 
@@ -61,6 +67,23 @@ variable `TUNAAR_PLAYLIST=<your playlist URL>`, and create.
 > settings → Change visibility) for the NAS to pull it without credentials.
 
 Then browse to `http://<nas-ip>:5004`.
+
+### Helper script (install / update / status)
+
+`tunaar.sh` wraps the Docker commands so you don't have to remember the flags —
+handy on a NAS over SSH:
+
+```bash
+TUNAAR_PLAYLIST="https://your/playlist.m3u" ./tunaar.sh up   # pull + start
+./tunaar.sh update     # pull latest image, recreate, prune the old one
+./tunaar.sh status     # container state + health check
+./tunaar.sh logs       # follow logs
+./tunaar.sh restart    # restart
+./tunaar.sh down       # stop and remove
+```
+
+It reads `TUNAAR_PLAYLIST`, `TUNAAR_EPG_URL`, `TUNAAR_PORT`, `TUNAAR_IMAGE`,
+`TUNAAR_VOLUME`, and `TUNAAR_NETWORK` (`host` or `bridge`) from the environment.
 
 ### Using a compose file instead
 

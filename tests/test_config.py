@@ -64,6 +64,25 @@ def test_env_overrides_take_precedence_over_file(tmp_path):
     assert cfg.playlist == "from-env.m3u"
 
 
+def test_normalize_folds_playlist_into_sources(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"playlist": "http://a/1.m3u, http://b/2.m3u"}))
+    cfg = Config.load(str(path))
+    assert [s["url"] for s in cfg.sources] == ["http://a/1.m3u", "http://b/2.m3u"]
+
+
+def test_effective_epg_urls_merges_auto(tmp_path):
+    cfg = Config.load(str(tmp_path / "c.json"), env={"TUNAAR_EPG_URL": "http://manual/x.xml"})
+    urls = cfg.effective_epg_urls(["http://discovered/y.xml", "http://manual/x.xml"])
+    # manual first, discovered appended, de-duplicated
+    assert urls == ["http://manual/x.xml", "http://discovered/y.xml"]
+
+
+def test_effective_epg_urls_ignores_auto_when_disabled(tmp_path):
+    cfg = Config.load(str(tmp_path / "c.json"), env={"TUNAAR_EPG_AUTO": "false"})
+    assert cfg.effective_epg_urls(["http://discovered/y.xml"]) == []
+
+
 def test_unknown_keys_ignored(tmp_path):
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"playlist": "x.m3u", "totally_unknown": 1}))

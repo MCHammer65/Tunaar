@@ -43,6 +43,41 @@ def fetch(source: str, *, user_agent: str = "Tunaar", timeout: int = 60) -> byte
     return raw
 
 
+def build_many(
+    raw_docs: list[bytes],
+    *,
+    keep_ids: set[str] | None = None,
+) -> EpgResult:
+    """Merge several XMLTV documents into one, then optionally filter.
+
+    Channels are de-duplicated by id across documents; programmes are kept for
+    any retained channel. Parse errors in one document don't sink the rest.
+    """
+    root = ET.Element("tv")
+    root.set("generator-info-name", "Tunaar")
+    seen_channels: set[str] = set()
+
+    for raw in raw_docs:
+        try:
+            doc = ET.fromstring(raw)
+        except ET.ParseError:
+            continue
+        for child in list(doc):
+            if child.tag == "channel":
+                cid = child.get("id", "")
+                if cid in seen_channels:
+                    continue
+                seen_channels.add(cid)
+                root.append(child)
+            elif child.tag == "programme":
+                root.append(child)
+
+    merged = b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(
+        root, encoding="utf-8"
+    )
+    return build(merged, keep_ids=keep_ids)
+
+
 def build(
     raw_xml: bytes,
     *,
