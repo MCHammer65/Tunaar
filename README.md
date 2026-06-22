@@ -32,50 +32,43 @@ on being **robust and effortless**:
 A pre-built multi-arch image (amd64 + arm64) is published to GHCR on every push
 to `main`: **`ghcr.io/mchammer65/plexiptv:latest`**.
 
-```bash
-mkdir -p tunaar/config && cd tunaar
-# grab the example config and compose file
-curl -fsSL https://raw.githubusercontent.com/MCHammer65/PlexIPTV/main/config.example.json -o config/config.json
-curl -fsSL https://raw.githubusercontent.com/MCHammer65/PlexIPTV/main/docker-compose.yml -o docker-compose.yml
-# edit config/config.json -> set "playlist" (and "epg_url" if you have one)
-docker compose up -d
-```
-
-Or build from source instead of pulling:
+**No config file needed** — everything can be set with `TUNAAR_*` environment
+variables. The only one you must set is your playlist:
 
 ```bash
-git clone https://github.com/MCHammer65/PlexIPTV.git tunaar && cd tunaar
-mkdir -p config && cp config.example.json config/config.json
-# in docker-compose.yml: comment out `image:` and uncomment `build: .`
-docker compose up -d --build
+docker run -d --name tunaar --restart unless-stopped \
+  --network host \
+  -e TUNAAR_PLAYLIST="https://iptv-org.github.io/iptv/index.m3u" \
+  -v tunaar-config:/config \
+  ghcr.io/mchammer65/plexiptv:latest
 ```
 
-Open `http://<host>:5004` for the dashboard.
+Open `http://<host>:5004` for the dashboard. That's it.
 
-> `docker-compose.yml` uses `network_mode: host` so the advertised stream URLs
-> stay correct on your LAN. Prefer port mapping? Comment that line out and
-> uncomment the `ports:` block.
+> Host networking keeps the advertised stream URLs correct on your LAN. On
+> Docker Desktop (Mac/Windows), drop `--network host` and add `-p 5004:5004`.
 
 ### QNAP (Container Station)
 
-QNAP NAS are Linux, so the pre-built image and host networking both work.
+QNAP NAS are Linux, so the pre-built image and host networking both work. The
+one-liner above works over SSH (Container Station ships Docker). Or use the UI:
 
-**Via SSH (recommended)** — enable SSH in *Control Panel → Telnet / SSH*, then:
+**Container Station → Containers → Create**, search the registry for
+`ghcr.io/mchammer65/plexiptv`, choose **Host** networking, add an environment
+variable `TUNAAR_PLAYLIST=<your playlist URL>`, and create.
 
-```bash
-mkdir -p /share/Container/tunaar/config && cd /share/Container/tunaar
-curl -fsSL https://raw.githubusercontent.com/MCHammer65/PlexIPTV/main/config.example.json -o config/config.json
-curl -fsSL https://raw.githubusercontent.com/MCHammer65/PlexIPTV/main/docker-compose.yml -o docker-compose.yml
-vi config/config.json          # set "playlist" / "epg_url"
-docker compose up -d           # Container Station 3 ships `docker compose`
-```
-
-**Via the UI** — *Container Station → Applications → Create*, paste the contents
-of `docker-compose.yml`, and create. The image pulls automatically. (If the
-GHCR package is private you'll first need to add registry credentials; making
-the package **public** in GitHub avoids this.)
+> The GHCR package must be **public** (GitHub → Packages → plexiptv → Package
+> settings → Change visibility) for the NAS to pull it without credentials.
 
 Then browse to `http://<nas-ip>:5004`.
+
+### Using a compose file instead
+
+```bash
+git clone https://github.com/MCHammer65/PlexIPTV.git tunaar && cd tunaar
+# edit TUNAAR_PLAYLIST in docker-compose.yml
+docker compose up -d
+```
 
 ### Run without Docker
 
@@ -119,7 +112,11 @@ and an **XMLTV** guide at `…/epg.xml`.
 | `playlist_refresh` / `epg_refresh` | Cache TTLs in seconds. |
 | `advertised_url` | Override the base URL given to Plex (reverse-proxy setups). |
 
-Config path: `TUNAAR_CONFIG` env var (defaults to `config.json`, `/config/config.json` in Docker).
+Every key can also be set via an environment variable named `TUNAAR_<KEY>` in
+uppercase (e.g. `TUNAAR_PLAYLIST`, `TUNAAR_TUNER_COUNT`, `TUNAAR_EPG_URL`). Env
+vars override the config file, so no file is required at all. The config file
+path itself is set with `TUNAAR_CONFIG` (defaults to `config.json`, or
+`/config/config.json` in Docker).
 
 ## Endpoints
 
