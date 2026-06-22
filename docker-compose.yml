@@ -6,14 +6,20 @@ services:
     # build: .
     container_name: tunaar
     restart: unless-stopped
-    # Host networking lets Plex reach the tuner directly on your LAN and keeps
-    # the advertised stream URLs correct. Works on QNAP / Linux hosts.
+    # Host networking keeps the advertised stream URLs correct on your LAN.
+    # Works on QNAP / Linux hosts. (On Docker Desktop use a ports: mapping.)
     network_mode: host
-    # On Docker Desktop (Mac/Windows) host mode is limited — comment the line
-    # above and use an explicit port mapping instead:
-    # ports:
-    #   - "5004:5004"
-    volumes:
-      - ./config:/config
     environment:
-      - TUNAAR_CONFIG=/config/config.json
+      # The only setting you must change — your IPTV playlist (URL or path).
+      - TUNAAR_PLAYLIST=https://iptv-org.github.io/iptv/index.m3u
+      # Optional XMLTV guide:
+      # - TUNAAR_EPG_URL=https://example.com/epg.xml
+      # Other overrides (all optional):
+      # - TUNAAR_TUNER_COUNT=4
+      # - TUNAAR_FRIENDLY_NAME=Tunaar
+    volumes:
+      # Persists the generated device id (and any saved config) across restarts.
+      - tunaar-config:/config
+
+volumes:
+  tunaar-config:
