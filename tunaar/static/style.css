@@ -1,5 +1,6 @@
 :root {
   --bg: #0c0f14;
+  --bg-glow: #1a2030;
   --panel: #141923;
   --panel-2: #1b2230;
   --line: #273042;
@@ -10,6 +11,27 @@
   --ok: #35c46b;
   --warn: #ffb347;
   --err: #ff5c5c;
+  --err-bg: rgba(255, 92, 92, .12);
+  --err-text: #ffd0d0;
+  --logo-text: #11151c;
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f6fb;
+  --bg-glow: #ffe6cc;
+  --panel: #ffffff;
+  --panel-2: #eef1f7;
+  --line: #dfe4ee;
+  --text: #1b2230;
+  --muted: #6b7587;
+  --accent: #e85d04;
+  --accent-2: #f48c06;
+  --ok: #1f9d57;
+  --warn: #c77700;
+  --err: #d64545;
+  --err-bg: rgba(214, 69, 69, .1);
+  --err-text: #8a1f1f;
+  --logo-text: #11151c;
 }
 
 * { box-sizing: border-box; }
@@ -17,9 +39,10 @@
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: radial-gradient(1200px 600px at 80% -10%, #1a2030 0%, var(--bg) 55%);
+  background: radial-gradient(1200px 600px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%);
   color: var(--text);
   min-height: 100vh;
+  transition: background .2s ease, color .2s ease;
 }
 
 header {
@@ -77,6 +100,23 @@ td img.chlogo { height: 22px; vertical-align: middle; }
 .endpoints a { color: var(--accent-2); text-decoration: none; margin-right: 14px; font-size: 13px; }
 .endpoints a:hover { text-decoration: underline; }
 
-.banner { background: rgba(255,92,92,.12); border: 1px solid var(--err); color: #ffd0d0; padding: 12px 14px; border-radius: 10px; margin-bottom: 18px; font-size: 14px; display: none; }
+.banner { background: var(--err-bg); border: 1px solid var(--err); color: var(--err-text); padding: 12px 14px; border-radius: 10px; margin-bottom: 18px; font-size: 14px; display: none; }
+
+.theme-toggle {
+  margin-left: auto;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: background .15s ease, border-color .15s ease;
+}
+.theme-toggle:hover { border-color: var(--accent); }
+.theme-toggle .icon { font-size: 15px; line-height: 1; }
 
 footer { color: var(--muted); font-size: 12px; text-align: center; padding: 30px; }
