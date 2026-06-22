@@ -1,75 +1,114 @@
-# PlexIPTV
+<div align="center">
+  <img src="tunaar/static/logo.svg" width="96" alt="Tunaar logo">
+  <h1>Tunaar</h1>
+  <p><strong>IPTV for Plex that just works.</strong><br>
+  A single-container HDHomeRun-emulating bridge that turns any IPTV M3U playlist
+  into Live TV for Plex, Emby & Jellyfin — with XMLTV guide data and reliable,
+  ffmpeg-remuxed streaming.</p>
+</div>
 
-An **HDHomeRun tuner emulator** that exposes an IPTV **M3U playlist** to
-**Plex Live TV & DVR**.
+---
 
-Plex can't ingest a raw M3U playlist directly — it talks to network tuners
-that look like a [Silicondust HDHomeRun](https://www.silicondust.com/). PlexIPTV
-pretends to be one of those tuners: it parses your M3U playlist and serves the
-handful of HTTP endpoints Plex uses to discover the device and list channels.
+## Why Tunaar?
 
-## Features (MVP)
+Tools like xTeVe are powerful but notoriously clunky — fiddly UI, tedious EPG
+mapping, buffering that drops streams, and config that corrupts. Tunaar focuses
+on being **robust and effortless**:
 
-- Parses extended M3U / M3U8 playlists (`tvg-id`, `tvg-name`, `tvg-logo`,
-  `group-title`, `tvg-chno`).
-- Emulates the HDHomeRun discovery + lineup endpoints Plex expects.
-- Redirects each channel to its real stream URL, with channel numbers taken
-  from `tvg-chno` (or auto-assigned, collision-free).
-- Caches the playlist so Plex's frequent polling doesn't refetch it every time.
+- 🎯 **One Docker container.** `docker compose up` and you're done — ffmpeg
+  included.
+- 📡 **Real tuner slots.** Concurrent streams are capped at `tuner_count` and
+  released the moment a client disconnects — no phantom "all tuners busy".
+- 🎬 **Reliable streaming.** Each channel is remuxed through ffmpeg
+  (`-c copy -f mpegts`, auto-reconnect) into a clean MPEG-TS that players accept
+  without the hit-and-miss buffering of bare redirects. HLS sources just work.
+- 🗓️ **EPG built in.** Point it at an XMLTV URL; Tunaar filters the guide to your
+  lineup and serves it at `/epg.xml`.
+- 🛡️ **Config that can't corrupt.** Written atomically and validated on load.
+- 📊 **Clean dashboard.** Live status, channels, and active tuners at a glance.
 
-## Quick start
+## Quick start (Docker)
+
+```bash
+git clone https://github.com/MCHammer65/PlexIPTV.git tunaar && cd tunaar
+mkdir -p config && cp config.example.json config/config.json
+# edit config/config.json -> set "playlist" (and "epg_url" if you have one)
+docker compose up -d
+```
+
+Open `http://<host>:5004` for the dashboard.
+
+> `docker-compose.yml` uses `network_mode: host` so Plex can auto-discover the
+> tuner on your LAN. Prefer port mapping? Comment that line out and uncomment the
+> `ports:` block.
+
+### Run without Docker
 
 ```bash
 pip install -r requirements.txt
-cp config.example.json config.json   # then edit "playlist"
+cp config.example.json config.json   # edit "playlist"
 python run.py
 ```
 
-By default the server listens on `0.0.0.0:5004`.
+ffmpeg must be on `PATH` for the default `ffmpeg` stream mode (Tunaar falls back
+to direct passthrough if it isn't).
 
-### Add the tuner in Plex
+## Add the tuner in Plex
 
-1. Open **Settings → Live TV & DVR → Set up Plex DVR**.
-2. If the device isn't auto-detected, enter the server's address manually,
-   e.g. `192.168.1.50:5004`.
-3. Plex reads the lineup and walks you through channel mapping.
+1. **Settings → Live TV & DVR → Set up Plex DVR.**
+2. If it isn't auto-detected, enter the address manually, e.g. `192.168.1.50:5004`.
+3. Map channels. For the guide, choose **"Have an XMLTV file?"** and point Plex at
+   `http://192.168.1.50:5004/epg.xml` (or use Plex's own guide and let it match).
+
+Emby/Jellyfin: add an **M3U Tuner** at `…/lineup.json` (or an HDHomeRun device)
+and an **XMLTV** guide at `…/epg.xml`.
 
 ## Configuration
 
 `config.json` (see `config.example.json`):
 
-| Key              | Description                                                       |
-|------------------|-------------------------------------------------------------------|
-| `friendly_name`  | Name Plex shows for the tuner.                                     |
-| `device_id`      | Unique device id reported to Plex.                                 |
-| `tuner_count`    | Number of simultaneous tuners to advertise.                       |
-| `host` / `port`  | Address the server binds to.                                       |
-| `playlist`       | URL or local path to your M3U playlist. **Required.**             |
-| `advertised_url` | Override the base URL given to Plex (useful behind a reverse proxy). |
+| Key | Description |
+|-----|-------------|
+| `friendly_name` | Tuner name shown in Plex. |
+| `device_id` | Stable device id. Leave `""` to auto-generate & persist. |
+| `tuner_count` | Max simultaneous streams (tuner slots). |
+| `host` / `port` | Bind address (default `0.0.0.0:5004`). |
+| `playlist` | **Required.** URL or path to your M3U playlist. |
+| `epg_url` | URL or path to an XMLTV guide (`.xml` or `.xml.gz`). Optional. |
+| `stream_mode` | `ffmpeg` (default, robust), `direct` (passthrough), or `redirect`. |
+| `filter_epg_to_lineup` | Trim the guide to channels in your lineup (default `true`). |
+| `user_agent` | User-Agent sent to playlist/EPG/stream sources. |
+| `buffer_chunk` | Stream read size in bytes. |
+| `playlist_refresh` / `epg_refresh` | Cache TTLs in seconds. |
+| `advertised_url` | Override the base URL given to Plex (reverse-proxy setups). |
 
-The config path can also be set via the `PLEXIPTV_CONFIG` environment variable.
+Config path: `TUNAAR_CONFIG` env var (defaults to `config.json`, `/config/config.json` in Docker).
 
 ## Endpoints
 
-| Endpoint              | Purpose                                            |
-|-----------------------|----------------------------------------------------|
-| `GET /discover.json`  | Device description Plex uses to identify the tuner. |
-| `GET /lineup_status.json` | Scan / lineup status.                          |
-| `GET /lineup.json`    | The channel lineup.                                |
-| `POST /lineup.post`   | Channel-scan trigger (no-op).                      |
-| `GET /device.xml`     | UPnP description (used by some discovery paths).   |
-| `GET /stream/<n>`     | Redirects to the real stream for channel `n`.      |
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /` | Branded status dashboard. |
+| `GET /discover.json` · `/lineup.json` · `/lineup_status.json` · `/device.xml` | HDHomeRun emulation for Plex. |
+| `POST /lineup.post` | Channel-scan trigger (no-op). |
+| `GET /stream/<n>` | Remuxed/proxied stream for channel `n` (consumes a tuner slot). |
+| `GET /epg.xml` | XMLTV guide, filtered to your lineup. |
+| `GET /api/status` · `/api/channels` | JSON for the dashboard. |
+| `GET /healthz` | Health check. |
 
-## Tests
+## Development
 
 ```bash
-pip install pytest
+pip install -r requirements.txt pytest
 pytest
 ```
 
 ## Roadmap
 
-- XMLTV EPG handling and channel/EPG mapping helpers.
-- A web UI to filter and reorder channels.
-- SSDP broadcast for zero-config discovery.
-- Stream proxying with real tuner-slot accounting.
+- Editable channel ordering / filtering from the dashboard.
+- SSDP broadcast for fully zero-config discovery.
+- Per-source playlist merging and channel grouping.
+
+## License
+
+See [LICENSE](LICENSE).

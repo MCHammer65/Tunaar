@@ -1,8 +1,10 @@
+.git
 __pycache__/
 *.py[cod]
 .venv/
 venv/
-config.json
-config/
-*.log
 .pytest_cache/
+config/
+config.json
+tests/
+*.log

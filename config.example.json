@@ -1,11 +1,21 @@
 {
-  "friendly_name": "PlexIPTV",
-  "device_id": "12345678",
-  "tuner_count": 2,
+  "friendly_name": "Tunaar",
+  "device_id": "",
+  "tuner_count": 4,
   "host": "0.0.0.0",
   "port": 5004,
 
   "playlist": "https://iptv-org.github.io/iptv/index.m3u",
+  "epg_url": "",
 
-  "advertised_url": null
+  "stream_mode": "ffmpeg",
+  "user_agent": "Tunaar/0.2 (HDHomeRun)",
+  "buffer_chunk": 65536,
+
+  "playlist_refresh": 3600,
+  "epg_refresh": 3600,
+  "filter_epg_to_lineup": true,
+
+  "advertised_url": null,
+  "ffmpeg_path": "ffmpeg"
 }

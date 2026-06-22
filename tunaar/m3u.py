@@ -7,9 +7,7 @@ from dataclasses import dataclass, field
 
 import requests
 
-# Matches key="value" attribute pairs on an #EXTINF line.
 _ATTR_RE = re.compile(r'([\w-]+)="([^"]*)"')
-# Splits an #EXTINF line into its attribute block and the trailing display name.
 _EXTINF_RE = re.compile(r"#EXTINF:-?\d+\s*(?P<attrs>.*?),(?P<name>.*)$")
 
 
@@ -29,9 +27,9 @@ class Channel:
 def parse(text: str) -> list[Channel]:
     """Parse extended M3U ``text`` into a list of :class:`Channel`.
 
-    Guide numbers come from the ``tvg-chno`` attribute when present;
-    otherwise channels are numbered sequentially. Numbers are de-duplicated
-    so each channel is uniquely addressable.
+    Guide numbers come from ``tvg-chno`` when present, otherwise channels are
+    numbered sequentially. Numbers are de-duplicated so each channel is
+    uniquely addressable.
     """
     channels: list[Channel] = []
     pending: Channel | None = None
@@ -43,13 +41,11 @@ def parse(text: str) -> list[Channel]:
         if line.startswith("#EXTINF"):
             pending = _parse_extinf(line)
         elif line.startswith("#"):
-            # Other directives (e.g. #EXTGRP) — ignore for the MVP.
-            continue
+            continue  # other directives (#EXTGRP etc.) — ignored
         elif pending is not None:
             pending.url = line
             channels.append(pending)
             pending = None
-        # A URL with no preceding #EXTINF is skipped.
 
     return _assign_numbers(channels)
 
@@ -64,9 +60,9 @@ def _parse_extinf(line: str) -> Channel:
         name = line.split(",", 1)[-1].strip()
 
     return Channel(
-        number="",  # assigned later
+        number="",
         name=name or attrs.get("tvg-name", "Unknown"),
-        url="",  # filled from the following line
+        url="",
         logo=attrs.get("tvg-logo", ""),
         group=attrs.get("group-title", ""),
         tvg_id=attrs.get("tvg-id", ""),
@@ -91,10 +87,12 @@ def _assign_numbers(channels: list[Channel]) -> list[Channel]:
     return channels
 
 
-def load(source: str, *, timeout: int = 30) -> list[Channel]:
+def load(source: str, *, user_agent: str = "Tunaar", timeout: int = 30) -> list[Channel]:
     """Load and parse a playlist from a URL or local file ``source``."""
     if source.startswith(("http://", "https://")):
-        resp = requests.get(source, timeout=timeout)
+        resp = requests.get(
+            source, timeout=timeout, headers={"User-Agent": user_agent}
+        )
         resp.raise_for_status()
         text = resp.text
     else:
