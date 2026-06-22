@@ -35,6 +35,25 @@ DEFAULTS: dict = {
 }
 
 
+def _coerce(default, raw: str):
+    """Coerce an env-var string to the type of the matching default value."""
+    if isinstance(default, bool):
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+    if isinstance(default, int):
+        return int(raw)
+    return raw
+
+
+def _env_overrides(env: dict) -> dict:
+    """Read TUNAAR_<FIELD> overrides for any known config key (except path)."""
+    out: dict = {}
+    for key, default in DEFAULTS.items():
+        raw = env.get(f"TUNAAR_{key.upper()}")
+        if raw is not None and raw != "":
+            out[key] = _coerce(default, raw)
+    return out
+
+
 @dataclass
 class Config:
     friendly_name: str = DEFAULTS["friendly_name"]
@@ -58,12 +77,17 @@ class Config:
     # -- loading / saving -------------------------------------------------
 
     @classmethod
-    def load(cls, path: str | None = None) -> "Config":
-        path = path or os.environ.get("TUNAAR_CONFIG", "config.json")
+    def load(cls, path: str | None = None, env: dict | None = None) -> "Config":
+        env = os.environ if env is None else env
+        path = path or env.get("TUNAAR_CONFIG", "config.json")
         data = dict(DEFAULTS)
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as fh:
                 data.update(json.load(fh))
+
+        # Environment variables (TUNAAR_<FIELD>) override the file, so the whole
+        # thing can be configured with no config file at all.
+        data.update(_env_overrides(env))
 
         known = {f.name for f in fields(cls)} - {"path"}
         cfg = cls(**{k: v for k, v in data.items() if k in known}, path=path)

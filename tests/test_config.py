@@ -43,6 +43,27 @@ def test_atomic_save_roundtrip(tmp_path):
     assert [p.name for p in tmp_path.iterdir()] == ["config.json"]
 
 
+def test_env_overrides_with_coercion(tmp_path):
+    env = {
+        "TUNAAR_PLAYLIST": "http://example.com/list.m3u",
+        "TUNAAR_TUNER_COUNT": "6",
+        "TUNAAR_FILTER_EPG_TO_LINEUP": "false",
+        "TUNAAR_FRIENDLY_NAME": "Living Room",
+    }
+    cfg = Config.load(str(tmp_path / "config.json"), env=env)
+    assert cfg.playlist == "http://example.com/list.m3u"
+    assert cfg.tuner_count == 6  # coerced to int
+    assert cfg.filter_epg_to_lineup is False  # coerced to bool
+    assert cfg.friendly_name == "Living Room"
+
+
+def test_env_overrides_take_precedence_over_file(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"playlist": "from-file.m3u"}))
+    cfg = Config.load(str(path), env={"TUNAAR_PLAYLIST": "from-env.m3u"})
+    assert cfg.playlist == "from-env.m3u"
+
+
 def test_unknown_keys_ignored(tmp_path):
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"playlist": "x.m3u", "totally_unknown": 1}))
