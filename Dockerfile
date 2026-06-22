@@ -1,6 +1,11 @@
 # Tunaar — single-container IPTV → Plex bridge
 FROM python:3.12-slim
 
+LABEL org.opencontainers.image.title="Tunaar" \
+      org.opencontainers.image.description="Robust single-container IPTV-to-Plex bridge (HDHomeRun emulation, XMLTV EPG, ffmpeg remux)" \
+      org.opencontainers.image.source="https://github.com/MCHammer65/PlexIPTV" \
+      org.opencontainers.image.licenses="MIT"
+
 # ffmpeg powers the robust remuxing stream mode.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \

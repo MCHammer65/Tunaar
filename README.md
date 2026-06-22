@@ -29,18 +29,53 @@ on being **robust and effortless**:
 
 ## Quick start (Docker)
 
+A pre-built multi-arch image (amd64 + arm64) is published to GHCR on every push
+to `main`: **`ghcr.io/mchammer65/plexiptv:latest`**.
+
 ```bash
-git clone https://github.com/MCHammer65/PlexIPTV.git tunaar && cd tunaar
-mkdir -p config && cp config.example.json config/config.json
+mkdir -p tunaar/config && cd tunaar
+# grab the example config and compose file
+curl -fsSL https://raw.githubusercontent.com/MCHammer65/PlexIPTV/main/config.example.json -o config/config.json
+curl -fsSL https://raw.githubusercontent.com/MCHammer65/PlexIPTV/main/docker-compose.yml -o docker-compose.yml
 # edit config/config.json -> set "playlist" (and "epg_url" if you have one)
 docker compose up -d
 ```
 
+Or build from source instead of pulling:
+
+```bash
+git clone https://github.com/MCHammer65/PlexIPTV.git tunaar && cd tunaar
+mkdir -p config && cp config.example.json config/config.json
+# in docker-compose.yml: comment out `image:` and uncomment `build: .`
+docker compose up -d --build
+```
+
 Open `http://<host>:5004` for the dashboard.
 
-> `docker-compose.yml` uses `network_mode: host` so Plex can auto-discover the
-> tuner on your LAN. Prefer port mapping? Comment that line out and uncomment the
-> `ports:` block.
+> `docker-compose.yml` uses `network_mode: host` so the advertised stream URLs
+> stay correct on your LAN. Prefer port mapping? Comment that line out and
+> uncomment the `ports:` block.
+
+### QNAP (Container Station)
+
+QNAP NAS are Linux, so the pre-built image and host networking both work.
+
+**Via SSH (recommended)** — enable SSH in *Control Panel → Telnet / SSH*, then:
+
+```bash
+mkdir -p /share/Container/tunaar/config && cd /share/Container/tunaar
+curl -fsSL https://raw.githubusercontent.com/MCHammer65/PlexIPTV/main/config.example.json -o config/config.json
+curl -fsSL https://raw.githubusercontent.com/MCHammer65/PlexIPTV/main/docker-compose.yml -o docker-compose.yml
+vi config/config.json          # set "playlist" / "epg_url"
+docker compose up -d           # Container Station 3 ships `docker compose`
+```
+
+**Via the UI** — *Container Station → Applications → Create*, paste the contents
+of `docker-compose.yml`, and create. The image pulls automatically. (If the
+GHCR package is private you'll first need to add registry credentials; making
+the package **public** in GitHub avoids this.)
+
+Then browse to `http://<nas-ip>:5004`.
 
 ### Run without Docker
 
@@ -56,7 +91,9 @@ to direct passthrough if it isn't).
 ## Add the tuner in Plex
 
 1. **Settings → Live TV & DVR → Set up Plex DVR.**
-2. If it isn't auto-detected, enter the address manually, e.g. `192.168.1.50:5004`.
+2. Tunaar doesn't yet broadcast for auto-discovery, so click **"Don't see your
+   HDHomeRun? Enter its network address manually"** and enter your host, e.g.
+   `192.168.1.50:5004`.
 3. Map channels. For the guide, choose **"Have an XMLTV file?"** and point Plex at
    `http://192.168.1.50:5004/epg.xml` (or use Plex's own guide and let it match).
 
