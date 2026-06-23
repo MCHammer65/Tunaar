@@ -1,21 +1,24 @@
 #!/bin/sh
 # Tunaar deploy/update helper — manage the container without remembering flags.
 #
-#   ./tunaar.sh up            # pull latest image + (re)start
-#   ./tunaar.sh update        # pull latest image, recreate, prune old image
-#   ./tunaar.sh logs          # follow logs
-#   ./tunaar.sh status        # container + health
-#   ./tunaar.sh restart       # restart the container
-#   ./tunaar.sh down          # stop and remove the container
+#   ./tunaar.sh up               # pull latest image + (re)start
+#   ./tunaar.sh update           # pull latest image, recreate, prune old image
+#   ./tunaar.sh logs             # follow logs
+#   ./tunaar.sh status           # container + health
+#   ./tunaar.sh restart          # restart the container
+#   ./tunaar.sh down             # stop and remove the container
+#   ./tunaar.sh watchtower       # start auto-updater (watches only tunaar)
+#   ./tunaar.sh watchtower-stop  # stop and remove the auto-updater
 #
 # Configure via env vars (or edit the defaults below):
-#   TUNAAR_PLAYLIST  IPTV playlist URL (only thing you usually need)
-#   TUNAAR_EPG_URL   optional XMLTV guide URL
-#   TUNAAR_IMAGE     image ref (default ghcr.io/mchammer65/plexiptv:latest)
-#   TUNAAR_PORT      host port for the dashboard (default 5004)
-#   TUNAAR_VOLUME    config volume: a named volume (default tunaar-config) or an
-#                    absolute host path for a bind mount, e.g. /share/.../config
-#   TUNAAR_NETWORK   "host" (default) or "bridge" (uses -p PORT:5004)
+#   TUNAAR_PLAYLIST   IPTV playlist URL (only thing you usually need)
+#   TUNAAR_EPG_URL    optional XMLTV guide URL
+#   TUNAAR_IMAGE      image ref (default ghcr.io/mchammer65/plexiptv:latest)
+#   TUNAAR_PORT       host port for the dashboard (default 5004)
+#   TUNAAR_VOLUME     config volume: a named volume (default tunaar-config) or an
+#                     absolute host path for a bind mount, e.g. /share/.../config
+#   TUNAAR_NETWORK    "host" (default) or "bridge" (uses -p PORT:5004)
+#   WATCHTOWER_POLL   auto-update check interval in seconds (default 86400 = daily)
 
 set -eu
 
@@ -24,6 +27,9 @@ NAME="tunaar"
 PORT="${TUNAAR_PORT:-5004}"
 VOLUME="${TUNAAR_VOLUME:-tunaar-config}"
 NETWORK="${TUNAAR_NETWORK:-host}"
+WT_NAME="tunaar-watchtower"
+WT_IMAGE="${WATCHTOWER_IMAGE:-containrrr/watchtower:latest}"
+WT_POLL="${WATCHTOWER_POLL:-86400}"  # default: check once a day
 # Only forces the playlist if you set TUNAAR_PLAYLIST; otherwise the value in
 # the mounted config.json (or the dashboard) is used and left untouched.
 PLAYLIST="${TUNAAR_PLAYLIST:-}"
@@ -72,6 +78,20 @@ case "${1:-up}" in
     fi
     log "update complete"
     ;;
+  watchtower)
+    # Auto-update only the tunaar container. Passing "$NAME" as an argument
+    # scopes Watchtower to it alone, so other containers on this host are left
+    # untouched. --cleanup removes the superseded image after each update.
+    docker rm -f "$WT_NAME" >/dev/null 2>&1 || true
+    log "starting auto-updater ($WT_IMAGE, every ${WT_POLL}s, watching '$NAME')"
+    docker run -d --name "$WT_NAME" --restart unless-stopped \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      "$WT_IMAGE" --cleanup --interval "$WT_POLL" "$NAME" >/dev/null
+    log "auto-update enabled — tunaar will update itself within ${WT_POLL}s of a new release"
+    ;;
+  watchtower-stop)
+    docker rm -f "$WT_NAME" >/dev/null 2>&1 && log "auto-updater removed" || log "auto-updater not running"
+    ;;
   restart) docker restart "$NAME" >/dev/null && log "restarted" ;;
   down)    docker rm -f "$NAME" >/dev/null 2>&1 && log "removed" || log "not running" ;;
   logs)    exec docker logs -f "$NAME" ;;
@@ -82,5 +102,5 @@ case "${1:-up}" in
       "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:5004/healthz').read().decode())" \
       2>/dev/null || log "health check unavailable (container may still be starting)"
     ;;
-  *) die "unknown command '$1' (use: up|update|restart|down|logs|status)" ;;
+  *) die "unknown command '$1' (use: up|update|restart|down|logs|status|watchtower|watchtower-stop)" ;;
 esac

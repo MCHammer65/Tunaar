@@ -90,6 +90,30 @@ TUNAAR_PLAYLIST="https://your/playlist.m3u" ./tunaar.sh up   # pull + start
 It reads `TUNAAR_PLAYLIST`, `TUNAAR_EPG_URL`, `TUNAAR_PORT`, `TUNAAR_IMAGE`,
 `TUNAAR_VOLUME`, and `TUNAAR_NETWORK` (`host` or `bridge`) from the environment.
 
+### Automatic updates
+
+Two ways to keep Tunaar current:
+
+**Hands-off (recommended) — Watchtower.** Runs a tiny companion container that
+checks for a new image and updates Tunaar for you. It's scoped to *only* the
+`tunaar` container, so nothing else on your host is touched:
+
+```bash
+./tunaar.sh watchtower                       # check daily, auto-update
+WATCHTOWER_POLL=3600 ./tunaar.sh watchtower   # check hourly instead
+./tunaar.sh watchtower-stop                   # turn it back off
+```
+
+**One-click from the dashboard.** The **Console → Update** button needs the
+Docker socket mounted. Enable it once and the button works thereafter:
+
+```bash
+TUNAAR_SELF_UPDATE=1 ./tunaar.sh update
+```
+
+Both grant the container/companion Docker access (root-equivalent), so opt in
+deliberately. If you'd rather not, just run `./tunaar.sh update` over SSH.
+
 ### Using a compose file instead
 
 ```bash
