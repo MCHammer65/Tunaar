@@ -35,6 +35,15 @@
       <div class="card"><div class="label">Discovery</div><div class="value" id="discovery" style="font-size:22px">—</div><div class="sub">UDP 65001</div></div>
     </div>
 
+    <div class="section-title">Update</div>
+    <div class="panel">
+      <div class="form-row">
+        <button id="update-check" class="btn-ghost" type="button">Check for updates</button>
+        <button id="update-apply" class="btn" type="button" disabled>Update now</button>
+        <span id="update-status" class="hint" style="margin:0;flex:1">—</span>
+      </div>
+    </div>
+
     <div class="section-title">Controls</div>
     <div class="panel">
       <div class="form-row">
@@ -140,6 +149,41 @@
     }
     $('test-btn').addEventListener('click', runTest);
     $('test-num').addEventListener('keydown', (e) => { if (e.key === 'Enter') runTest(); });
+
+    // ---- self-update ----
+    async function checkUpdate() {
+      $('update-status').textContent = 'Checking…';
+      $('update-apply').disabled = true;
+      try {
+        const u = await (await fetch('/api/update/check')).json();
+        if (u.socket === false) {
+          $('update-status').innerHTML = 'Docker socket not mounted — updates via SSH. ' +
+            '<span style="color:var(--muted)">Add <code>-v /var/run/docker.sock:/var/run/docker.sock</code> to enable one-click updates.</span>';
+          return;
+        }
+        if (u.error) { $('update-status').textContent = 'Error: ' + u.error; return; }
+        if (u.update_available === true) {
+          $('update-status').innerHTML = '⬆ Update available for <code>' + esc(u.image) + '</code>';
+          $('update-apply').disabled = false;
+        } else if (u.update_available === false) {
+          $('update-status').textContent = '✓ Up to date (' + esc(u.image) + ')';
+        } else {
+          $('update-status').textContent = u.message || 'Could not determine';
+        }
+      } catch (e) { $('update-status').textContent = 'Check failed'; }
+    }
+    async function applyUpdate() {
+      if (!confirm('Pull the new image and recreate the Tunaar container now? It will reconnect in a few seconds.')) return;
+      $('update-apply').disabled = true;
+      $('update-status').textContent = 'Updating — pulling image and recreating…';
+      try {
+        const r = await (await fetch('/api/update/apply', { method: 'POST' })).json();
+        $('update-status').textContent = r.message || (r.ok ? 'Updating…' : 'Update failed');
+        if (r.ok && r.updated) { $('log-status').textContent = '○ updating…'; }
+      } catch (e) { $('update-status').textContent = 'Update request failed (container may be restarting)'; }
+    }
+    $('update-check').addEventListener('click', checkUpdate);
+    $('update-apply').addEventListener('click', applyUpdate);
 
     loadRecent(); connect(); refreshSystem();
     setInterval(refreshSystem, 4000);
