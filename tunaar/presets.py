@@ -42,6 +42,48 @@ PRESETS: list[dict] = [
         "url": "https://i.mjh.nz/PlutoTV/us.m3u8",
         "group": "Pluto TV",
     },
+    {
+        "id": "samsung-ca",
+        "label": "Samsung TV Plus — Canada",
+        "region": "CA",
+        "name": "Samsung TV Plus CA",
+        "url": "https://i.mjh.nz/SamsungTVPlus/ca.m3u8",
+        "group": "Samsung TV Plus",
+    },
+    {
+        "id": "pluto-ca",
+        "label": "Pluto TV — Canada",
+        "region": "CA",
+        "name": "Pluto TV CA",
+        "url": "https://i.mjh.nz/PlutoTV/ca.m3u8",
+        "group": "Pluto TV",
+    },
+    {
+        "id": "samsung-fr",
+        "label": "Samsung TV Plus — France",
+        "region": "FR",
+        "name": "Samsung TV Plus FR",
+        "url": "https://i.mjh.nz/SamsungTVPlus/fr.m3u8",
+        "group": "Samsung TV Plus",
+    },
+    {
+        "id": "pluto-fr",
+        "label": "Pluto TV — France",
+        "region": "FR",
+        "name": "Pluto TV FR",
+        "url": "https://i.mjh.nz/PlutoTV/fr.m3u8",
+        "group": "Pluto TV",
+    },
+    {
+        # Not on Samsung/Pluto — community streams via iptv-org. These have no
+        # embedded guide, so EPG coverage is sparse; streams can be flaky.
+        "id": "jamaica",
+        "label": "Jamaica (iptv-org)",
+        "region": "JM",
+        "name": "Jamaica",
+        "url": "https://iptv-org.github.io/iptv/countries/jm.m3u",
+        "group": "Jamaica",
+    },
 ]
 
 
