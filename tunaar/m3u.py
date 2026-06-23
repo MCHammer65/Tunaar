@@ -139,7 +139,8 @@ def load_sources(
     """Load and merge several playlists.
 
     Each source is a dict with ``url`` (required) and optional ``name`` /
-    ``group`` (a group override applied to all of that source's channels).
+    ``group`` (a group override applied to all of that source's channels) /
+    ``type`` (``"m3u"`` default, or ``"hdhr"`` for a real HDHomeRun device).
     Numbers are assigned across the merged set so every channel is unique, and
     embedded EPG URLs from all sources are collected.
     """
@@ -151,9 +152,19 @@ def load_sources(
         if not url:
             continue
         name = src.get("name") or url
+        override = (src.get("group") or "").strip()
+        stype = (src.get("type") or "m3u").lower()
+
+        if stype == "hdhr":
+            chans = load_hdhr(url, user_agent=user_agent, timeout=timeout)
+            for ch in chans:
+                ch.source = name
+                ch.group = override or "Freeview"
+            merged.extend(chans)
+            continue
+
         text = _fetch_text(url, user_agent=user_agent, timeout=timeout)
         doc = parse_document(text, source=name)
-        override = (src.get("group") or "").strip()
         if override:
             for ch in doc.channels:
                 ch.group = override
@@ -165,3 +176,38 @@ def load_sources(
     seen: set[str] = set()
     unique_epg = [u for u in epg_urls if not (u in seen or seen.add(u))]
     return Playlist(channels=merged, epg_urls=unique_epg)
+
+
+def load_hdhr(url: str, *, user_agent: str = "Tunaar", timeout: int = 30) -> list[Channel]:
+    """Read a real HDHomeRun device's ``lineup.json`` into channels.
+
+    ``url`` may be the device base (``http://192.168.1.50``), its
+    ``discover.json``, or its ``lineup.json``. HDHomeRun stream URLs are plain
+    MPEG-TS, so Tunaar's normal proxy/ffmpeg path handles them unchanged.
+    """
+    headers = {"User-Agent": user_agent}
+    base = url.rstrip("/")
+    if base.endswith("lineup.json"):
+        lineup_url = base
+    elif base.endswith("discover.json"):
+        disc = requests.get(base, timeout=timeout, headers=headers).json()
+        lineup_url = disc.get("LineupURL") or base.rsplit("/", 1)[0] + "/lineup.json"
+    else:
+        lineup_url = base + "/lineup.json"
+
+    data = requests.get(lineup_url, timeout=timeout, headers=headers).json()
+    channels: list[Channel] = []
+    for item in data:
+        number = str(item.get("GuideNumber", "")).strip()
+        channels.append(
+            Channel(
+                number="",
+                name=item.get("GuideName", "Unknown"),
+                url=item.get("URL", ""),
+                group="",
+                tvg_id="",
+                attrs={"tvg-chno": number} if number else {},
+            )
+        )
+    return channels
+

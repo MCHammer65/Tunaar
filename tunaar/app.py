@@ -141,15 +141,31 @@ class EpgCache:
                     raw_docs.append(
                         epg.fetch(url, user_agent=self._config.user_agent)
                     )
-                lineup_ids = {c.tvg_id for c in self._channels.get() if c.tvg_id}
-                keep = lineup_ids if self._config.filter_epg_to_lineup else None
-                self._result = epg.build_many(raw_docs, keep_ids=keep)
-                self._matched = len(lineup_ids & self._result.channel_ids)
+                # Build the full guide first so we can name-match channels that
+                # have no tvg-id (e.g. real HDHomeRun / OTA channels).
+                full = epg.build_many(raw_docs, keep_ids=None)
+                chans = self._channels.get()
+                matched_by_name = 0
+                if full.name_to_id:
+                    for ch in chans:
+                        if not ch.tvg_id:
+                            cid = full.name_to_id.get(epg.norm_name(ch.name))
+                            if cid:
+                                ch.tvg_id = cid
+                                matched_by_name += 1
+
+                lineup_ids = {c.tvg_id for c in chans if c.tvg_id}
+                if self._config.filter_epg_to_lineup:
+                    self._result = epg.build(full.xml, keep_ids=lineup_ids)
+                else:
+                    self._result = full
+                self._matched = len(lineup_ids & full.channel_ids)
                 self._fetched_at = time.monotonic()
                 self._error = None
                 log.info(
-                    "EPG loaded: %d source(s), %d programmes, %d channels matched",
+                    "EPG loaded: %d source(s), %d programmes, %d matched (%d by name)",
                     len(urls), self._result.programme_count, self._matched,
+                    matched_by_name,
                 )
             except Exception as exc:  # noqa: BLE001 - surfaced on dashboard
                 self._error = str(exc)
@@ -508,11 +524,13 @@ def create_app(config: Config | None = None) -> Flask:
         url = (body.get("url") or "").strip()
         if not url:
             return jsonify({"error": "url is required"}), 400
+        stype = (body.get("type") or "m3u").lower()
         config.sources.append(
             {
                 "name": (body.get("name") or "").strip(),
                 "url": url,
                 "group": (body.get("group") or "").strip(),
+                "type": "hdhr" if stype == "hdhr" else "m3u",
             }
         )
         _save_and_refresh()
