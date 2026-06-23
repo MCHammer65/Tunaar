@@ -152,26 +152,43 @@
     $('test-num').addEventListener('keydown', (e) => { if (e.key === 'Enter') runTest(); });
 
     // ---- self-update ----
+    // When the Docker socket isn't mounted, in-app updates can't work — that's
+    // the expected setup if you use Watchtower or update over SSH. Rather than
+    // nag, we hide the manual controls and show a calm one-liner.
+    function renderNoSocket() {
+      $('update-check').style.display = 'none';
+      $('update-apply').style.display = 'none';
+      $('update-status').innerHTML =
+        'Auto-updates run outside the app — via <code>Watchtower</code> or ' +
+        '<code>./tunaar.sh update</code>. ' +
+        '<a href="/docs/install.html#updates" target="_blank" rel="noopener">Learn more</a>';
+    }
+    function renderCheck(u) {
+      if (u.error) { $('update-status').textContent = 'Error: ' + u.error; return; }
+      if (u.update_available === true) {
+        $('update-status').innerHTML = '⬆ Update available for <code>' + esc(u.image) + '</code>';
+        $('update-apply').disabled = false;
+      } else if (u.update_available === false) {
+        $('update-status').textContent = '✓ Up to date (' + esc(u.image) + ')';
+      } else {
+        $('update-status').textContent = u.message || 'Could not determine';
+      }
+    }
     async function checkUpdate() {
       $('update-status').textContent = 'Checking…';
       $('update-apply').disabled = true;
       try {
         const u = await (await fetch('/api/update/check')).json();
-        if (u.socket === false) {
-          $('update-status').innerHTML = 'Docker socket not mounted — updates via SSH. ' +
-            '<span style="color:var(--muted)">Add <code>-v /var/run/docker.sock:/var/run/docker.sock</code> to enable one-click updates.</span>';
-          return;
-        }
-        if (u.error) { $('update-status').textContent = 'Error: ' + u.error; return; }
-        if (u.update_available === true) {
-          $('update-status').innerHTML = '⬆ Update available for <code>' + esc(u.image) + '</code>';
-          $('update-apply').disabled = false;
-        } else if (u.update_available === false) {
-          $('update-status').textContent = '✓ Up to date (' + esc(u.image) + ')';
-        } else {
-          $('update-status').textContent = u.message || 'Could not determine';
-        }
+        if (u.socket === false) { renderNoSocket(); return; }
+        renderCheck(u);
       } catch (e) { $('update-status').textContent = 'Check failed'; }
+    }
+    // On load, detect socket state once so the panel reflects the real setup.
+    async function initUpdatePanel() {
+      try {
+        const u = await (await fetch('/api/update/check')).json();
+        if (u.socket === false) renderNoSocket();
+      } catch (e) { /* leave default controls in place */ }
     }
     async function applyUpdate() {
       if (!confirm('Pull the new image and recreate the Tunaar container now? It will reconnect in a few seconds.')) return;
@@ -186,7 +203,7 @@
     $('update-check').addEventListener('click', checkUpdate);
     $('update-apply').addEventListener('click', applyUpdate);
 
-    loadRecent(); connect(); refreshSystem();
+    loadRecent(); connect(); refreshSystem(); initUpdatePanel();
     setInterval(refreshSystem, 4000);
   </script>
 </body>
