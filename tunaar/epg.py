@@ -20,6 +20,12 @@ EMPTY_XMLTV = (
     b'<tv generator-info-name="Tunaar"></tv>\n'
 )
 
+# Many public EPG hosts 404/403 non-browser agents, so fetch guides as a browser.
+BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
+
 
 @dataclass
 class EpgResult:
@@ -40,10 +46,15 @@ def norm_name(name: str) -> str:
     return s
 
 
-def fetch(source: str, *, user_agent: str = "Tunaar", timeout: int = 60) -> bytes:
-    """Load an XMLTV document from a URL or local file, decompressing gzip."""
+def fetch(source: str, *, user_agent: str | None = None, timeout: int = 60) -> bytes:
+    """Load an XMLTV document from a URL or local file, decompressing gzip.
+
+    Defaults to a browser-like User-Agent because several public EPG hosts
+    (e.g. epgshare01) return 404/403 to non-browser agents.
+    """
     if source.startswith(("http://", "https://")):
-        resp = requests.get(source, timeout=timeout, headers={"User-Agent": user_agent})
+        headers = {"User-Agent": user_agent or BROWSER_UA}
+        resp = requests.get(source, timeout=timeout, headers=headers)
         resp.raise_for_status()
         raw = resp.content
     else:
