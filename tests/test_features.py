@@ -90,6 +90,47 @@ def test_epg_urls_split_when_pasted_on_one_line(client, app):
     assert app.config["TUNAAR"].epg_urls == ["http://a/guide.xml", "http://b/guide.xml"]
 
 
+def test_manual_epg_mapping_overrides_match(tmp_path, monkeypatch):
+    # An OTA-style channel with no tvg-id and a name the guide won't match.
+    playlist = '#EXTM3U\n#EXTINF:-1,BBC One South\nhttp://x/bbc\n'
+    epg_xml = (
+        b'<?xml version="1.0"?><tv>'
+        b'<channel id="bbc1.uk"><display-name>BBC One</display-name></channel>'
+        b'<programme start="20260101060000 +0000" channel="bbc1.uk"><title>News</title></programme>'
+        b'</tv>'
+    )
+    monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: playlist)
+    monkeypatch.setattr("tunaar.epg.fetch", lambda url, **k: epg_xml)
+
+    cfg = Config(
+        device_id="MAP1",
+        sources=[{"name": "OTA", "url": "http://x/l.m3u"}],
+        epg_urls=["http://x/guide.xml"],
+        epg_auto=False,
+        stream_mode="redirect",
+        path=str(tmp_path / "config.json"),
+    )
+    client = create_app(cfg).test_client()
+
+    # "BBC One South" does not auto-match "BBC One".
+    assert client.get("/api/status").get_json()["epg"]["matched"] == 0
+    # The guide channel is offered for mapping.
+    guide_chans = client.get("/api/epg/guide-channels").get_json()
+    assert {"id": "bbc1.uk", "name": "BBC One"} in guide_chans
+    # Map it manually, and now it matches.
+    r = client.post("/api/epg/map", json={"name": "BBC One South", "tvg_id": "bbc1.uk"})
+    assert r.status_code == 200
+    assert client.get("/api/status").get_json()["epg"]["matched"] == 1
+    assert client.get("/api/channels").get_json()[0]["tvg_id"] == "bbc1.uk"
+    # Clearing the mapping reverts it.
+    client.post("/api/epg/map", json={"name": "BBC One South", "tvg_id": ""})
+    assert client.get("/api/status").get_json()["epg"]["matched"] == 0
+
+
+def test_epg_map_requires_name(client):
+    assert client.post("/api/epg/map", json={"tvg_id": "x"}).status_code == 400
+
+
 def test_group_include_filter(client, app):
     resp = client.post("/api/groups", json={"include": ["News"]})
     assert resp.status_code == 200

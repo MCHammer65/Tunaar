@@ -105,8 +105,10 @@ class ChannelCache:
         return next((c for c in self.get() if c.number == number), None)
 
     def invalidate(self) -> None:
+        # -inf guarantees staleness regardless of process uptime (monotonic()
+        # is small early on, so 0.0 wouldn't reliably force a reload).
         with self._lock:
-            self._fetched_at = 0.0
+            self._fetched_at = float("-inf")
 
     @property
     def all_groups(self) -> list[str]:
@@ -135,6 +137,15 @@ class EpgCache:
         self._error: str | None = None
         self._matched = 0
         self._sources_used = 0
+        self._guide_index: dict = {}  # all guide channels: tvg_id -> display name
+
+    @property
+    def guide_channels(self) -> list[dict]:
+        """All channels present in the loaded guide, for the mapping UI."""
+        return [
+            {"id": cid, "name": name}
+            for cid, name in sorted(self._guide_index.items(), key=lambda kv: kv[1].lower())
+        ]
 
     def get(self) -> epg.EpgResult:
         with self._lock:
@@ -165,15 +176,20 @@ class EpgCache:
                 # Build the full guide first so we can name-match channels that
                 # have no tvg-id (e.g. real HDHomeRun / OTA channels).
                 full = epg.build_many(raw_docs, keep_ids=None)
+                self._guide_index = dict(full.id_to_name)
                 chans = self._channels.get()
+                overrides = self._config.epg_overrides or {}
                 matched_by_name = 0
-                if full.name_to_id:
-                    for ch in chans:
-                        if not ch.tvg_id:
-                            cid = full.name_to_id.get(epg.norm_name(ch.name))
-                            if cid:
-                                ch.tvg_id = cid
-                                matched_by_name += 1
+                for ch in chans:
+                    # A manual mapping always wins over auto name-matching.
+                    if ch.name in overrides and overrides[ch.name]:
+                        ch.tvg_id = overrides[ch.name]
+                        continue
+                    if not ch.tvg_id and full.name_to_id:
+                        cid = full.name_to_id.get(epg.norm_name(ch.name))
+                        if cid:
+                            ch.tvg_id = cid
+                            matched_by_name += 1
 
                 lineup_ids = {c.tvg_id for c in chans if c.tvg_id}
                 if self._config.filter_epg_to_lineup:
@@ -204,7 +220,7 @@ class EpgCache:
 
     def invalidate(self) -> None:
         with self._lock:
-            self._fetched_at = 0.0
+            self._fetched_at = float("-inf")  # always stale; see ChannelCache
 
     @property
     def matched(self) -> int:
@@ -551,8 +567,30 @@ def create_app(config: Config | None = None) -> Flask:
                 "groups_include": config.groups_include,
                 "groups_exclude": config.groups_exclude,
                 "all_groups": channels.all_groups,
+                "epg_overrides": config.epg_overrides,
             }
         )
+
+    @app.get("/api/epg/guide-channels")
+    def api_guide_channels() -> Response:
+        guide.get()  # ensure the guide is built so the index is populated
+        return jsonify(guide.guide_channels)
+
+    @app.post("/api/epg/map")
+    def api_epg_map() -> Response:
+        body = request.get_json(silent=True) or {}
+        name = (body.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "name is required"}), 400
+        tvg_id = (body.get("tvg_id") or "").strip()
+        overrides = dict(config.epg_overrides or {})
+        if tvg_id:
+            overrides[name] = tvg_id
+        else:
+            overrides.pop(name, None)  # empty id clears the mapping
+        config.epg_overrides = overrides
+        _save_and_refresh()
+        return jsonify({"ok": True, "epg_overrides": config.epg_overrides})
 
     @app.get("/api/presets")
     def api_presets() -> Response:

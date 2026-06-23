@@ -35,6 +35,7 @@ class EpgResult:
     channel_ids: set[str]
     programme_count: int
     name_to_id: dict = field(default_factory=dict)
+    id_to_name: dict = field(default_factory=dict)
 
 
 def norm_name(name: str) -> str:
@@ -115,6 +116,7 @@ def build(
 
     channel_ids: set[str] = set()
     name_to_id: dict = {}
+    id_to_name: dict = {}
     programme_count = 0
 
     for child in list(root):
@@ -127,6 +129,7 @@ def build(
             for dn in child.findall("display-name"):
                 if dn.text:
                     name_to_id.setdefault(norm_name(dn.text), cid)
+                    id_to_name.setdefault(cid, dn.text.strip())
         elif child.tag == "programme":
             cid = child.get("channel", "")
             if keep_ids is not None and cid not in keep_ids:
@@ -143,4 +146,5 @@ def build(
         channel_ids=channel_ids,
         programme_count=programme_count,
         name_to_id=name_to_id,
+        id_to_name=id_to_name,
     )

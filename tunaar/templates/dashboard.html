@@ -105,6 +105,18 @@
         <div class="form-row"><button id="groups-save" class="btn" type="button">Save groups</button></div>
       </div>
 
+      <div class="panel" style="grid-column:1/-1">
+        <h3>Manual EPG mapping</h3>
+        <p class="hint">For channels the guide didn't match automatically (e.g. regional Freeview), pick the
+          correct guide entry. Mappings are saved and always win over auto-matching.</p>
+        <div class="form-row" style="margin-top:0">
+          <input id="map-search" class="inp" placeholder="Search channels…" style="flex:1">
+          <label class="switch"><input type="checkbox" id="map-unmatched" checked> Unmatched only</label>
+        </div>
+        <datalist id="guide-options"></datalist>
+        <div id="map-list" style="margin-top:10px;max-height:320px;overflow:auto"></div>
+      </div>
+
     </div>
 
     <div class="section-title">Plex endpoints</div>
@@ -203,7 +215,7 @@
       const el = $('settings');
       el.hidden = !el.hidden;
       $('settings-toggle').textContent = el.hidden ? 'Show ▾' : 'Hide ▴';
-      if (!el.hidden) { loadConfig(); loadPresets(); }
+      if (!el.hidden) { loadConfig(); loadPresets(); loadGuideOptions(); loadMapList(); }
     });
 
     async function loadPresets() {
@@ -257,6 +269,68 @@
     }
 
     function afterChange() { refreshStatus(); loadChannels(); }
+
+    // ---- Manual EPG mapping ----
+    let guideById = {};      // tvg_id -> display name
+    let guideByLabel = {};   // "Name · id" -> tvg_id
+    let mapOverrides = {};   // channel name -> tvg_id
+
+    async function loadGuideOptions() {
+      try {
+        const list = await (await fetch('/api/epg/guide-channels')).json();
+        guideById = {}; guideByLabel = {};
+        const dl = $('guide-options');
+        dl.innerHTML = list.map(g => {
+          const label = `${g.name} · ${g.id}`;
+          guideById[g.id] = g.name; guideByLabel[label] = g.id;
+          return `<option value="${esc(label)}"></option>`;
+        }).join('');
+      } catch (e) { /* guide not loaded yet */ }
+    }
+
+    async function loadMapList() {
+      let chans;
+      try {
+        chans = await (await fetch('/api/channels')).json();
+        mapOverrides = (await (await fetch('/api/config')).json()).epg_overrides || {};
+      } catch (e) { return; }
+      const q = $('map-search').value.trim().toLowerCase();
+      const unmatchedOnly = $('map-unmatched').checked;
+      let rows = chans.filter(c => !unmatchedOnly || !c.tvg_id);
+      if (q) rows = rows.filter(c => c.name.toLowerCase().includes(q));
+      const shown = rows.slice(0, 200);
+      $('map-list').innerHTML = shown.length ? shown.map(c => {
+        const cur = c.tvg_id ? (guideById[c.tvg_id] ? `${guideById[c.tvg_id]} · ${c.tvg_id}` : c.tvg_id) : '';
+        const isManual = mapOverrides[c.name] ? ' <em style="color:var(--accent-2)">(manual)</em>' : '';
+        return `<div class="form-row" style="margin:4px 0" data-name="${esc(c.name)}">
+            <span style="flex:0 0 200px">${esc(c.name)}${isManual}</span>
+            <input class="inp map-inp" list="guide-options" style="flex:1" placeholder="— no guide —" value="${esc(cur)}">
+            <button class="btn-ghost map-clear" type="button">Clear</button>
+          </div>`;
+      }).join('') + (rows.length > 200 ? `<p class="hint">Showing first 200 of ${rows.length} — refine your search.</p>` : '')
+        : '<span class="hint">No channels match. (Load a guide first if the list is empty.)</span>';
+
+      $('map-list').querySelectorAll('.map-inp').forEach(inp => {
+        inp.addEventListener('change', () => saveMap(inp.closest('[data-name]').dataset.name, inp.value.trim()));
+      });
+      $('map-list').querySelectorAll('.map-clear').forEach(btn => {
+        btn.addEventListener('click', () => saveMap(btn.closest('[data-name]').dataset.name, ''));
+      });
+    }
+
+    async function saveMap(name, value) {
+      // Accept either a "Name · id" label or a raw tvg_id typed directly.
+      let tvg_id = '';
+      if (value) tvg_id = guideByLabel[value] || (guideById[value] ? value : value);
+      await fetch('/api/epg/map', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, tvg_id })
+      });
+      loadGuideOptions(); loadMapList(); refreshStatus();
+    }
+
+    $('map-search').addEventListener('input', loadMapList);
+    $('map-unmatched').addEventListener('change', loadMapList);
 
     $('src-add').addEventListener('click', async () => {
       const url = $('src-url').value.trim();

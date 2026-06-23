@@ -28,6 +28,7 @@ DEFAULTS: dict = {
     "epg_url": "",  # legacy; folded into `epg_urls` on load
     "epg_urls": [],  # extra XMLTV URLs, merged together
     "epg_auto": True,  # also use EPG URLs embedded in the playlist header
+    "epg_overrides": {},  # manual channel-name -> guide tvg_id mappings
     "groups_include": [],  # if non-empty, only these groups are exposed
     "groups_exclude": [],  # these groups are always hidden
     "advertised_url": None,
@@ -43,7 +44,7 @@ DEFAULTS: dict = {
 }
 
 # Managed as structured lists via the dashboard, not via env vars.
-_ENV_SKIP = {"sources", "epg_urls"}
+_ENV_SKIP = {"sources", "epg_urls", "epg_overrides"}
 
 
 def _split_list(value: str) -> list[str]:
@@ -87,6 +88,7 @@ class Config:
     epg_url: str = DEFAULTS["epg_url"]
     epg_urls: list = field(default_factory=list)
     epg_auto: bool = DEFAULTS["epg_auto"]
+    epg_overrides: dict = field(default_factory=dict)
     groups_include: list = field(default_factory=list)
     groups_exclude: list = field(default_factory=list)
     advertised_url: str | None = DEFAULTS["advertised_url"]
