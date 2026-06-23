@@ -391,6 +391,23 @@ def create_app(config: Config | None = None) -> Flask:
         )
         return jsonify(result)
 
+    @app.get("/api/update/check")
+    def api_update_check() -> Response:
+        from . import selfupdate
+
+        return jsonify(selfupdate.check())
+
+    @app.post("/api/update/apply")
+    def api_update_apply() -> Response:
+        from . import selfupdate
+
+        try:
+            result = selfupdate.apply()
+        except Exception as exc:  # noqa: BLE001 - surfaced to console
+            log.error("Self-update failed: %s", exc)
+            return jsonify({"ok": False, "error": str(exc)}), 500
+        return jsonify(result)
+
     @app.post("/api/restart")
     def api_restart() -> Response:
         log.warning("Restart requested via console")

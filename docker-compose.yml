@@ -20,6 +20,10 @@ services:
     volumes:
       # Persists the generated device id (and any saved config) across restarts.
       - tunaar-config:/config
+      # Optional: enables the console's one-click "Update now" button by letting
+      # Tunaar pull a new image and recreate itself. Grants Docker (root-level)
+      # access — omit it if you'd rather update via SSH / ./tunaar.sh update.
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   tunaar-config:

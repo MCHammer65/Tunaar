@@ -39,6 +39,9 @@ run_container() {
   set -- -d --name "$NAME" --restart unless-stopped -v "$VOLUME:/config"
   [ -n "$PLAYLIST" ] && set -- "$@" -e "TUNAAR_PLAYLIST=$PLAYLIST"
   [ -n "${TUNAAR_EPG_URL:-}" ] && set -- "$@" -e "TUNAAR_EPG_URL=$TUNAAR_EPG_URL"
+  # TUNAAR_SELF_UPDATE=1 mounts the Docker socket so the console's "Update now"
+  # button works (grants Docker/root-level access — opt in deliberately).
+  [ "${TUNAAR_SELF_UPDATE:-0}" = "1" ] && set -- "$@" -v /var/run/docker.sock:/var/run/docker.sock
 
   if [ "$NETWORK" = "host" ]; then
     set -- "$@" --network host
