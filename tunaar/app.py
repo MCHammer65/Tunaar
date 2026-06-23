@@ -19,10 +19,12 @@ import time
 from flask import (
     Flask,
     Response,
+    abort,
     jsonify,
     redirect,
     render_template,
     request,
+    send_from_directory,
     stream_with_context,
 )
 
@@ -31,6 +33,17 @@ from .config import Config
 from .logbus import BusHandler, LogBus
 
 log = logging.getLogger("tunaar")
+
+# The branded HTML guides live in <repo>/docs (one level above the package),
+# and are also served by the dashboard so they're available offline.
+DOCS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "docs")
+
+
+def _serve_doc(filename: str) -> Response:
+    full = os.path.normpath(os.path.join(DOCS_DIR, filename))
+    if not full.startswith(os.path.normpath(DOCS_DIR)) or not os.path.isfile(full):
+        abort(404)
+    return send_from_directory(DOCS_DIR, filename)
 
 
 def _base_url(config: Config) -> str:
@@ -444,6 +457,14 @@ def create_app(config: Config | None = None) -> Flask:
             name=config.friendly_name,
             version=__version__,
         )
+
+    @app.get("/docs/")
+    def docs_index() -> Response:
+        return _serve_doc("index.html")
+
+    @app.get("/docs/<path:filename>")
+    def docs_file(filename: str) -> Response:
+        return _serve_doc(filename)
 
     @app.get("/api/status")
     def api_status() -> Response:

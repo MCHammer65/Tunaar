@@ -133,6 +133,14 @@ def test_add_unknown_preset_rejected(client):
     assert r.status_code == 400
 
 
+def test_docs_served_and_traversal_blocked(client):
+    assert client.get("/docs/user-guide.html").status_code == 200
+    assert client.get("/docs/install.html").status_code == 200
+    assert client.get("/docs/").status_code == 200
+    assert client.get("/docs/../app.py").status_code == 404
+    assert client.get("/docs/missing.html").status_code == 404
+
+
 def test_set_epg_urls_and_toggle_auto(client, app):
     resp = client.post(
         "/api/epg", json={"epg_urls": ["http://manual/g.xml"], "epg_auto": False}
