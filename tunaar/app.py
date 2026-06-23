@@ -7,6 +7,12 @@ dashboard with a small JSON API.
 
 from __future__ import annotations
 
+import json
+import logging
+import os
+import platform
+import queue
+import sys
 import threading
 import time
 
@@ -22,6 +28,9 @@ from flask import (
 
 from . import __version__, epg, m3u, proxy
 from .config import Config
+from .logbus import BusHandler, LogBus
+
+log = logging.getLogger("tunaar")
 
 
 def _base_url(config: Config) -> str:
@@ -69,8 +78,13 @@ class ChannelCache:
                 self._channels = kept
                 self._fetched_at = time.monotonic()
                 self._error = None
+                log.info(
+                    "Playlist loaded: %d channels from %d source(s)",
+                    len(kept), len(self._config.sources),
+                )
             except Exception as exc:  # noqa: BLE001 - surfaced on dashboard
                 self._error = str(exc)
+                log.error("Playlist load failed: %s", exc)
             return self._channels
 
     def by_number(self, number: str) -> m3u.Channel | None:
@@ -133,8 +147,13 @@ class EpgCache:
                 self._matched = len(lineup_ids & self._result.channel_ids)
                 self._fetched_at = time.monotonic()
                 self._error = None
+                log.info(
+                    "EPG loaded: %d source(s), %d programmes, %d channels matched",
+                    len(urls), self._result.programme_count, self._matched,
+                )
             except Exception as exc:  # noqa: BLE001 - surfaced on dashboard
                 self._error = str(exc)
+                log.error("EPG load failed: %s", exc)
                 if self._result is None:
                     self._result = epg.EpgResult(epg.EMPTY_XMLTV, set(), 0)
             return self._result
@@ -164,7 +183,19 @@ def create_app(config: Config | None = None) -> Flask:
     guide = EpgCache(config, channels)
     tuners = proxy.TunerManager(config.tuner_count)
 
-    app.config.update(TUNAAR=config, CHANNELS=channels, EPG=guide, TUNERS=tuners)
+    bus = LogBus()
+    started_at = time.time()
+    # Bind this app's bus as the active log sink (one app per process in prod;
+    # tests create several, so always rebind to the latest).
+    for h in list(log.handlers):
+        if isinstance(h, BusHandler):
+            log.removeHandler(h)
+    log.addHandler(BusHandler(bus))
+    log.setLevel(logging.INFO)
+
+    app.config.update(
+        TUNAAR=config, CHANNELS=channels, EPG=guide, TUNERS=tuners, LOGBUS=bus
+    )
 
     # -- HDHomeRun emulation ---------------------------------------------
 
@@ -255,10 +286,16 @@ def create_app(config: Config | None = None) -> Flask:
         try:
             session = tuners.acquire(ch.number, ch.name)
         except proxy.TunersBusy as exc:
+            log.warning("Tuner busy — refused %s (%s): %s", ch.number, ch.name, exc)
             return Response(f"Tuner busy: {exc}", status=503)
 
         use_ffmpeg = config.stream_mode == "ffmpeg" and proxy.ffmpeg_available(
             config.ffmpeg_path
+        )
+        log.info(
+            "Stream start ch %s '%s' [%s] for %s",
+            ch.number, ch.name, "ffmpeg" if use_ffmpeg else "direct",
+            request.remote_addr or "?",
         )
         if use_ffmpeg:
             source = proxy.ffmpeg_stream(
@@ -278,10 +315,92 @@ def create_app(config: Config | None = None) -> Flask:
             finally:
                 source.close()
                 tuners.release(session)
+                log.info("Stream end ch %s '%s'", ch.number, ch.name)
 
         return Response(
             stream_with_context(generate()), mimetype="video/mp2t"
         )
+
+    # -- Console ----------------------------------------------------------
+
+    @app.get("/console")
+    def console() -> str:
+        return render_template(
+            "console.html", name=config.friendly_name, version=__version__
+        )
+
+    @app.get("/api/system")
+    def api_system() -> Response:
+        return jsonify(
+            {
+                "name": config.friendly_name,
+                "version": __version__,
+                "device_id": config.device_id,
+                "uptime": round(time.time() - started_at),
+                "python": platform.python_version(),
+                "stream_mode": config.stream_mode,
+                "ffmpeg": proxy.ffmpeg_available(config.ffmpeg_path),
+                "discovery": config.discovery,
+                "tuners": {
+                    "capacity": config.tuner_count,
+                    "in_use": tuners.in_use,
+                    "active": tuners.active(),
+                },
+            }
+        )
+
+    @app.get("/api/logs")
+    def api_logs() -> Response:
+        limit = request.args.get("limit", default=200, type=int)
+        return jsonify(bus.recent(limit))
+
+    @app.get("/api/logs/stream")
+    def api_logs_stream() -> Response:
+        def gen():
+            q = bus.subscribe()
+            try:
+                yield "retry: 3000\n\n"
+                while True:
+                    try:
+                        rec = q.get(timeout=15)
+                        yield f"data: {json.dumps(rec)}\n\n"
+                    except queue.Empty:
+                        yield ": keep-alive\n\n"  # heartbeat
+            finally:
+                bus.unsubscribe(q)
+
+        return Response(
+            stream_with_context(gen()),
+            mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.post("/api/test/<number>")
+    def api_test(number: str) -> Response:
+        ch = channels.by_number(number)
+        if ch is None:
+            return jsonify({"error": "unknown channel"}), 404
+        log.info("Testing channel %s '%s'", ch.number, ch.name)
+        result = proxy.probe(ch.url, user_agent=config.user_agent)
+        result["channel"] = ch.number
+        result["name"] = ch.name
+        level = "info" if result.get("ok") else "warning"
+        getattr(log, level)(
+            "Test %s '%s': %s", ch.number, ch.name,
+            "OK" if result.get("ok") else result.get("error", "failed"),
+        )
+        return jsonify(result)
+
+    @app.post("/api/restart")
+    def api_restart() -> Response:
+        log.warning("Restart requested via console")
+
+        def _exit():
+            time.sleep(0.5)
+            os._exit(0)  # container restart policy brings us back
+
+        threading.Thread(target=_exit, daemon=True).start()
+        return jsonify({"ok": True, "message": "restarting"})
 
     # -- Dashboard + API --------------------------------------------------
 
