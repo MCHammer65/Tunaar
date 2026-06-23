@@ -270,7 +270,8 @@
     });
 
     $('epg-save').addEventListener('click', async () => {
-      const urls = $('epg-urls').value.split('\n').map(s => s.trim()).filter(Boolean);
+      // Split on any whitespace/commas so multiple URLs on one line still work.
+      const urls = $('epg-urls').value.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
       await fetch('/api/epg', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ epg_urls: urls, epg_auto: $('epg-auto').checked })

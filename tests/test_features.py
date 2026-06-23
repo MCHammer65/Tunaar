@@ -81,6 +81,15 @@ def test_one_bad_epg_url_does_not_wipe_guide(tmp_path, monkeypatch):
     assert "unreachable" in (status["epg"].get("error") or "")
 
 
+def test_epg_urls_split_when_pasted_on_one_line(client, app):
+    # Two URLs pasted on a single line (space-separated) must become two URLs,
+    # not one broken concatenation.
+    one_line = "http://a/guide.xml http://b/guide.xml,http://a/guide.xml"
+    r = client.post("/api/epg", json={"epg_urls": [one_line], "epg_auto": False})
+    assert r.status_code == 200
+    assert app.config["TUNAAR"].epg_urls == ["http://a/guide.xml", "http://b/guide.xml"]
+
+
 def test_group_include_filter(client, app):
     resp = client.post("/api/groups", json={"include": ["News"]})
     assert resp.status_code == 200

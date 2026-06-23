@@ -12,6 +12,7 @@ import logging
 import os
 import platform
 import queue
+import re
 import sys
 import threading
 import time
@@ -620,7 +621,18 @@ def create_app(config: Config | None = None) -> Flask:
         if "epg_auto" in body:
             config.epg_auto = bool(body["epg_auto"])
         if "epg_urls" in body and isinstance(body["epg_urls"], list):
-            config.epg_urls = [str(u).strip() for u in body["epg_urls"] if str(u).strip()]
+            # Be forgiving: a user may paste several URLs on one line (separated
+            # by spaces/commas) instead of one per line. Split them apart and
+            # de-dupe so a single line never becomes one broken URL.
+            urls: list[str] = []
+            seen: set[str] = set()
+            for entry in body["epg_urls"]:
+                for part in re.split(r"[\s,]+", str(entry)):
+                    part = part.strip()
+                    if part and part not in seen:
+                        seen.add(part)
+                        urls.append(part)
+            config.epg_urls = urls
         _save_and_refresh()
         return jsonify(
             {"ok": True, "epg_urls": config.epg_urls, "epg_auto": config.epg_auto}
