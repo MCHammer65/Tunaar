@@ -5,6 +5,11 @@
   A single-container HDHomeRun-emulating bridge that turns any IPTV M3U playlist
   into Live TV for Plex, Emby & Jellyfin — with XMLTV guide data and reliable,
   ffmpeg-remuxed streaming.</p>
+  <p>
+    📦 <a href="docs/install.html">Docker Install Guide</a> &nbsp;·&nbsp;
+    📖 <a href="docs/user-guide.html">User Guide</a>
+    &nbsp;<em>(branded HTML — open in a browser)</em>
+  </p>
 </div>
 
 ---
