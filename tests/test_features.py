@@ -46,6 +46,41 @@ def test_epg_auto_discovered_from_playlist(client):
     assert status["epg"]["sources"] >= 1
 
 
+def test_one_bad_epg_url_does_not_wipe_guide(tmp_path, monkeypatch):
+    playlist = '#EXTM3U\n#EXTINF:-1 tvg-id="cnn.x",CNN\nhttp://x/cnn\n'
+    good = (
+        b'<?xml version="1.0"?><tv>'
+        b'<channel id="cnn.x"><display-name>CNN</display-name></channel>'
+        b'<programme start="20260101060000 +0000" channel="cnn.x"><title>News</title></programme>'
+        b'</tv>'
+    )
+
+    def fake_fetch(url, **k):
+        if "bad" in url:
+            raise RuntimeError("404 Not Found")
+        return good
+
+    monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: playlist)
+    monkeypatch.setattr("tunaar.epg.fetch", fake_fetch)
+
+    cfg = Config(
+        device_id="EPGOK",
+        sources=[{"name": "S", "url": "http://x/l.m3u"}],
+        epg_urls=["http://good/guide.xml", "http://bad/guide.xml"],
+        epg_auto=False,
+        stream_mode="redirect",
+        path=str(tmp_path / "config.json"),
+    )
+    client = create_app(cfg).test_client()
+
+    status = client.get("/api/status").get_json()
+    # The good source still produced a guide despite the bad one 404ing.
+    assert status["epg"]["programmes"] == 1
+    assert status["epg"]["matched"] == 1
+    # ...and the failure is surfaced, not silently swallowed.
+    assert "unreachable" in (status["epg"].get("error") or "")
+
+
 def test_group_include_filter(client, app):
     resp = client.post("/api/groups", json={"include": ["News"]})
     assert resp.status_code == 200

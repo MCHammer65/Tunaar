@@ -149,11 +149,18 @@ class EpgCache:
                 self._fetched_at = time.monotonic()
                 return self._result
             try:
+                # Fetch each source independently — one bad/404 URL must not
+                # wipe out the whole guide, just get skipped with a warning.
                 raw_docs = []
+                failed: list[str] = []
                 for url in urls:
-                    raw_docs.append(
-                        epg.fetch(url, user_agent=self._config.user_agent)
-                    )
+                    try:
+                        raw_docs.append(
+                            epg.fetch(url, user_agent=self._config.user_agent)
+                        )
+                    except Exception as exc:  # noqa: BLE001 - per-source, non-fatal
+                        failed.append(url)
+                        log.warning("EPG source failed, skipping: %s (%s)", url, exc)
                 # Build the full guide first so we can name-match channels that
                 # have no tvg-id (e.g. real HDHomeRun / OTA channels).
                 full = epg.build_many(raw_docs, keep_ids=None)
@@ -174,11 +181,18 @@ class EpgCache:
                     self._result = full
                 self._matched = len(lineup_ids & full.channel_ids)
                 self._fetched_at = time.monotonic()
-                self._error = None
+                # Surface skipped sources without failing the whole guide.
+                if failed:
+                    self._error = (
+                        f"{len(failed)} of {len(urls)} EPG source(s) unreachable: "
+                        + ", ".join(failed)
+                    )
+                else:
+                    self._error = None
                 log.info(
-                    "EPG loaded: %d source(s), %d programmes, %d matched (%d by name)",
-                    len(urls), self._result.programme_count, self._matched,
-                    matched_by_name,
+                    "EPG loaded: %d/%d source(s), %d programmes, %d matched (%d by name)",
+                    len(urls) - len(failed), len(urls), self._result.programme_count,
+                    self._matched, matched_by_name,
                 )
             except Exception as exc:  # noqa: BLE001 - surfaced on dashboard
                 self._error = str(exc)
