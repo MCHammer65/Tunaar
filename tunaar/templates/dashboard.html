@@ -89,7 +89,11 @@
 
       <div class="panel">
         <h3>Groups</h3>
-        <p class="hint">Tick the groups to expose in Plex. None ticked = all groups.</p>
+        <p class="hint">All groups are shown in Plex by default — <b>untick</b> a group to hide it.</p>
+        <div class="form-row" style="margin-top:0">
+          <button id="groups-all" class="btn-ghost" type="button">Select all</button>
+          <button id="groups-none" class="btn-ghost" type="button">Deselect all</button>
+        </div>
         <div id="group-list" class="group-grid"></div>
         <div class="form-row"><button id="groups-save" class="btn" type="button">Save groups</button></div>
       </div>
@@ -217,10 +221,12 @@
       $('epg-discovered').innerHTML = (cfg.discovered_epg || []).length
         ? 'Auto-detected: ' + cfg.discovered_epg.map(esc).join(', ') : '';
 
-      // groups
+      // groups — everything ticked by default; unticking hides a group
+      const exc = new Set(cfg.groups_exclude || []);
       const inc = new Set(cfg.groups_include || []);
+      const isOn = (g) => (inc.size ? inc.has(g) : true) && !exc.has(g);
       $('group-list').innerHTML = (cfg.all_groups || []).map(g =>
-        `<label class="grp"><input type="checkbox" value="${esc(g)}" ${inc.has(g) ? 'checked' : ''}> ${esc(g)}</label>`
+        `<label class="grp"><input type="checkbox" value="${esc(g)}" ${isOn(g) ? 'checked' : ''}> ${esc(g)}</label>`
       ).join('') || '<span class="hint">No groups loaded yet.</span>';
     }
 
@@ -246,11 +252,18 @@
       loadConfig(); afterChange();
     });
 
+    $('groups-all').addEventListener('click', () => {
+      $('group-list').querySelectorAll('input').forEach(i => i.checked = true);
+    });
+    $('groups-none').addEventListener('click', () => {
+      $('group-list').querySelectorAll('input').forEach(i => i.checked = false);
+    });
     $('groups-save').addEventListener('click', async () => {
-      const include = [...$('group-list').querySelectorAll('input:checked')].map(i => i.value);
+      // Unticked groups become the exclude list; include stays empty (= all).
+      const exclude = [...$('group-list').querySelectorAll('input:not(:checked)')].map(i => i.value);
       await fetch('/api/groups', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ include })
+        body: JSON.stringify({ include: [], exclude })
       });
       afterChange();
     });
