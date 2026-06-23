@@ -156,9 +156,9 @@ class EpgCache:
                 failed: list[str] = []
                 for url in urls:
                     try:
-                        raw_docs.append(
-                            epg.fetch(url, user_agent=self._config.user_agent)
-                        )
+                        # Use epg.fetch's browser-like default UA — public EPG
+                        # hosts often 404 the stream UA.
+                        raw_docs.append(epg.fetch(url))
                     except Exception as exc:  # noqa: BLE001 - per-source, non-fatal
                         failed.append(url)
                         log.warning("EPG source failed, skipping: %s (%s)", url, exc)
