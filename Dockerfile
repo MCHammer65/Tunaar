@@ -17,6 +17,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY tunaar ./tunaar
+COPY docs ./docs
 COPY run.py ./
 
 # Config and any state live on a mounted volume so they survive restarts.
