@@ -155,3 +155,32 @@ def _terminate(proc: subprocess.Popen) -> None:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
+
+
+def probe(url: str, *, user_agent: str, timeout: int = 10) -> dict:
+    """Quickly test an upstream URL without consuming a tuner slot.
+
+    Opens the stream, reads a small chunk, and reports timing/status so the
+    console can tell a live channel from a dead one.
+    """
+    start = time.time()
+    try:
+        with requests.get(
+            url, stream=True, timeout=timeout, headers={"User-Agent": user_agent}
+        ) as resp:
+            ok = resp.ok
+            chunk = next(resp.iter_content(chunk_size=8192), b"")
+            return {
+                "ok": bool(ok and chunk),
+                "status": resp.status_code,
+                "content_type": resp.headers.get("Content-Type", ""),
+                "bytes": len(chunk),
+                "ms": round((time.time() - start) * 1000),
+            }
+    except Exception as exc:  # noqa: BLE001 - surfaced to the console
+        return {
+            "ok": False,
+            "error": str(exc),
+            "ms": round((time.time() - start) * 1000),
+        }
+

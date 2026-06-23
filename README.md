@@ -33,6 +33,9 @@ on being **robust and effortless**:
   in the web UI — changes persist to config, no SSH required.
 - 🔎 **Auto-discovery.** Answers HDHomeRun discovery (UDP 65001) so Plex finds
   the tuner automatically — no manual IP entry.
+- 🛠️ **Admin console.** A `/console` page with a live activity log (streamed via
+  SSE), active-stream details, and controls to refresh, restart, and test a
+  channel's upstream — debugging without digging through container logs.
 - 🛡️ **Config that can't corrupt.** Written atomically and validated on load.
 
 ## Quick start (Docker)
@@ -151,6 +154,7 @@ path itself is set with `TUNAAR_CONFIG` (defaults to `config.json`, or
 | Endpoint | Purpose |
 |----------|---------|
 | `GET /` | Branded status dashboard. |
+| `GET /console` | Admin console: live logs, controls, channel testing. |
 | `GET /discover.json` · `/lineup.json` · `/lineup_status.json` · `/device.xml` | HDHomeRun emulation for Plex. |
 | `POST /lineup.post` | Channel-scan trigger (no-op). |
 | `GET /stream/<n>` | Remuxed/proxied stream for channel `n` (consumes a tuner slot). |

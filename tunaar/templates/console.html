@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ name }} — Console</title>
+  <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script>
+    (function () {
+      var saved = localStorage.getItem('tunaar-theme');
+      if (!saved) saved = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+    })();
+  </script>
+</head>
+<body>
+  <header>
+    <img src="{{ url_for('static', filename='logo.svg') }}" alt="{{ name }} logo">
+    <div>
+      <div class="title"><span>{{ name }}</span><span class="ver">v{{ version }}</span></div>
+      <div style="color:var(--muted);font-size:13px">Admin console</div>
+    </div>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/console" class="active">Console</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="cards">
+      <div class="card"><div class="label">Uptime</div><div class="value" id="uptime" style="font-size:22px">—</div><div class="sub" id="device">device —</div></div>
+      <div class="card"><div class="label">Tuners</div><div class="value" id="tuners">—</div><div class="sub">in use / capacity</div></div>
+      <div class="card"><div class="label">ffmpeg</div><div class="value" id="ffmpeg" style="font-size:22px">—</div><div class="sub" id="mode"></div></div>
+      <div class="card"><div class="label">Discovery</div><div class="value" id="discovery" style="font-size:22px">—</div><div class="sub">UDP 65001</div></div>
+    </div>
+
+    <div class="section-title">Controls</div>
+    <div class="panel">
+      <div class="form-row">
+        <button id="refresh" class="btn" type="button">Refresh playlist &amp; EPG</button>
+        <button id="restart" class="btn-ghost" type="button">Restart container</button>
+        <span style="flex:1"></span>
+        <input id="test-num" class="inp" placeholder="Channel #" style="flex:0 0 110px">
+        <button id="test-btn" class="btn" type="button">Test channel</button>
+      </div>
+      <div id="test-result" class="hint"></div>
+    </div>
+
+    <div class="section-title">Active streams</div>
+    <table>
+      <thead><tr><th>#</th><th>Channel</th><th>Name</th><th>Uptime</th></tr></thead>
+      <tbody id="active"><tr><td colspan="4" style="color:var(--muted)">none</td></tr></tbody>
+    </table>
+
+    <div class="section-head">
+      <div class="section-title" style="margin:0">Live activity</div>
+      <div class="log-controls">
+        <label class="switch"><input id="errors-only" type="checkbox"> errors only</label>
+        <label class="switch"><input id="autoscroll" type="checkbox" checked> auto-scroll</label>
+        <button id="clear-log" class="btn-ghost" type="button">Clear</button>
+        <span id="log-status" class="hint" style="margin:0">connecting…</span>
+      </div>
+    </div>
+    <div id="log" class="log"></div>
+  </main>
+
+  <footer>{{ name }} — admin console</footer>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => (s || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    const pad = (n) => String(n).padStart(2, '0');
+    const fmtTime = (t) => { const d = new Date(t * 1000); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+    const fmtUptime = (s) => { const h = Math.floor(s/3600), m = Math.floor((s%3600)/60); return h ? `${h}h ${m}m` : `${m}m ${s%60}s`; };
+
+    async function refreshSystem() {
+      try {
+        const s = await (await fetch('/api/system')).json();
+        $('uptime').textContent = fmtUptime(s.uptime);
+        $('device').textContent = 'device ' + s.device_id + ' · py' + s.python;
+        $('tuners').textContent = `${s.tuners.in_use} / ${s.tuners.capacity}`;
+        $('ffmpeg').textContent = s.ffmpeg ? 'ready' : 'missing';
+        $('mode').textContent = 'mode ' + s.stream_mode;
+        $('discovery').textContent = s.discovery ? 'on' : 'off';
+        const active = $('active');
+        active.innerHTML = s.tuners.active.length
+          ? s.tuners.active.map(t => `<tr><td>${t.id}</td><td><span class="num">${t.channel}</span></td><td>${esc(t.name)}</td><td>${t.uptime}s</td></tr>`).join('')
+          : '<tr><td colspan="4" style="color:var(--muted)">none</td></tr>';
+      } catch (e) {}
+    }
+
+    // ---- log feed ----
+    let buffer = [];
+    function levelClass(l) { l = (l||'').toUpperCase(); return l === 'ERROR' ? 'lg-err' : (l === 'WARNING' ? 'lg-warn' : 'lg-info'); }
+    function render() {
+      const errorsOnly = $('errors-only').checked;
+      const rows = buffer.filter(r => !errorsOnly || ['ERROR','WARNING'].includes((r.level||'').toUpperCase()));
+      $('log').innerHTML = rows.map(r =>
+        `<div class="lg ${levelClass(r.level)}"><span class="lg-t">${fmtTime(r.t)}</span><span class="lg-l">${esc(r.level)}</span><span class="lg-m">${esc(r.msg)}</span></div>`
+      ).join('');
+      if ($('autoscroll').checked) { const el = $('log'); el.scrollTop = el.scrollHeight; }
+    }
+    function add(rec) { buffer.push(rec); if (buffer.length > 600) buffer = buffer.slice(-600); render(); }
+
+    async function loadRecent() {
+      try { buffer = await (await fetch('/api/logs?limit=300')).json(); render(); } catch (e) {}
+    }
+
+    function connect() {
+      const es = new EventSource('/api/logs/stream');
+      es.onopen = () => { $('log-status').textContent = '● live'; };
+      es.onmessage = (e) => { try { add(JSON.parse(e.data)); } catch (x) {} };
+      es.onerror = () => { $('log-status').textContent = '○ reconnecting…'; };
+    }
+
+    $('errors-only').addEventListener('change', render);
+    $('clear-log').addEventListener('click', () => { buffer = []; render(); });
+
+    $('refresh').addEventListener('click', async () => {
+      await fetch('/api/refresh', { method: 'POST' });
+      setTimeout(refreshSystem, 500);
+    });
+    $('restart').addEventListener('click', async () => {
+      if (!confirm('Restart the Tunaar container? Streams will drop briefly.')) return;
+      await fetch('/api/restart', { method: 'POST' });
+      $('log-status').textContent = '○ restarting…';
+    });
+    async function runTest() {
+      const n = $('test-num').value.trim();
+      if (!n) return;
+      $('test-result').textContent = 'Testing channel ' + n + '…';
+      try {
+        const r = await (await fetch('/api/test/' + encodeURIComponent(n), { method: 'POST' })).json();
+        if (r.error && r.ok === undefined) { $('test-result').textContent = '✕ ' + r.error; return; }
+        $('test-result').innerHTML = (r.ok ? '✓ ' : '✕ ') +
+          `<b>${esc(r.name||'')}</b> — ${r.ok ? `${r.bytes} bytes in ${r.ms}ms` : esc(r.error || ('status ' + r.status))}` +
+          (r.content_type ? ` <span style="color:var(--muted)">(${esc(r.content_type)})</span>` : '');
+      } catch (e) { $('test-result').textContent = '✕ request failed'; }
+    }
+    $('test-btn').addEventListener('click', runTest);
+    $('test-num').addEventListener('keydown', (e) => { if (e.key === 'Enter') runTest(); });
+
+    loadRecent(); connect(); refreshSystem();
+    setInterval(refreshSystem, 4000);
+  </script>
+</body>
+</html>
