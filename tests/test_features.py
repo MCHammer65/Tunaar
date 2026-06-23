@@ -109,9 +109,10 @@ def test_name_based_epg_match_for_channel_without_tvgid(tmp_path, monkeypatch):
 def test_presets_listed_with_added_flag(client):
     presets = client.get("/api/presets").get_json()
     ids = {p["id"] for p in presets}
-    assert {"samsung-gb", "pluto-gb", "samsung-us", "pluto-us"} <= ids
+    assert {"samsung-gb", "pluto-gb", "samsung-us", "pluto-us",
+            "samsung-ca", "pluto-ca", "samsung-fr", "pluto-fr", "jamaica"} <= ids
     assert all(p["added"] is False for p in presets)  # none added yet
-    assert {p["region"] for p in presets} == {"GB", "US"}
+    assert {"GB", "US", "CA", "FR", "JM"} <= {p["region"] for p in presets}
 
 
 def test_add_preset_creates_source_and_marks_added(client):
