@@ -55,6 +55,34 @@ def test_ungrouped_channel_gets_undefined():
     assert m3u.parse(SAMPLE)[2].group == m3u.UNGROUPED
 
 
+def test_load_hdhr_lineup(monkeypatch):
+    lineup = [
+        {"GuideNumber": "2.1", "GuideName": "BBC ONE", "URL": "http://hd/auto/v2.1"},
+        {"GuideNumber": "3.1", "GuideName": "ITV1", "URL": "http://hd/auto/v3.1"},
+    ]
+
+    class Resp:
+        def json(self): return lineup
+        def raise_for_status(self): pass
+
+    monkeypatch.setattr(m3u.requests, "get", lambda *a, **k: Resp())
+    chans = m3u.load_hdhr("http://192.168.1.50")
+    assert [c.name for c in chans] == ["BBC ONE", "ITV1"]
+    assert chans[0].url == "http://hd/auto/v2.1"
+    assert chans[0].attrs["tvg-chno"] == "2.1"
+
+
+def test_load_sources_handles_hdhr_type(monkeypatch):
+    class Resp:
+        def json(self): return [{"GuideNumber": "1", "GuideName": "BBC", "URL": "http://hd/1"}]
+        def raise_for_status(self): pass
+
+    monkeypatch.setattr(m3u.requests, "get", lambda *a, **k: Resp())
+    pl = m3u.load_sources([{"url": "http://192.168.1.50", "type": "hdhr"}])
+    assert pl.channels[0].name == "BBC"
+    assert pl.channels[0].group == "Freeview"  # default group for OTA
+
+
 def test_load_sources_merges_and_overrides_group(monkeypatch):
     a = '#EXTM3U url-tvg="http://epg/a.xml"\n#EXTINF:-1,A\nhttp://a/1\n'
     b = '#EXTINF:-1 group-title="Sports",B\nhttp://b/1\n'

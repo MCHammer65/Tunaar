@@ -9,8 +9,9 @@ Plex / Emby / Jellyfin as the guide source.
 from __future__ import annotations
 
 import gzip
+import re
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import requests
 
@@ -27,6 +28,16 @@ class EpgResult:
     xml: bytes
     channel_ids: set[str]
     programme_count: int
+    name_to_id: dict = field(default_factory=dict)
+
+
+def norm_name(name: str) -> str:
+    """Normalise a channel name for fuzzy matching (drops HD/quality/spaces)."""
+    s = name.lower()
+    s = re.sub(r"\(.*?\)", "", s)  # drop "(1080p)" etc.
+    s = re.sub(r"\b(hd|sd|fhd|uhd|4k|hevc|h265)\b", "", s)
+    s = re.sub(r"[^a-z0-9]", "", s)
+    return s
 
 
 def fetch(source: str, *, user_agent: str = "Tunaar", timeout: int = 60) -> bytes:
@@ -92,6 +103,7 @@ def build(
     root = ET.fromstring(raw_xml)
 
     channel_ids: set[str] = set()
+    name_to_id: dict = {}
     programme_count = 0
 
     for child in list(root):
@@ -101,6 +113,9 @@ def build(
                 root.remove(child)
                 continue
             channel_ids.add(cid)
+            for dn in child.findall("display-name"):
+                if dn.text:
+                    name_to_id.setdefault(norm_name(dn.text), cid)
         elif child.tag == "programme":
             cid = child.get("channel", "")
             if keep_ids is not None and cid not in keep_ids:
@@ -112,4 +127,9 @@ def build(
     xml = b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(
         root, encoding="utf-8"
     )
-    return EpgResult(xml=xml, channel_ids=channel_ids, programme_count=programme_count)
+    return EpgResult(
+        xml=xml,
+        channel_ids=channel_ids,
+        programme_count=programme_count,
+        name_to_id=name_to_id,
+    )

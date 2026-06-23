@@ -75,6 +75,37 @@ def test_add_source_requires_url(client):
     assert client.post("/api/sources", json={"name": "x"}).status_code == 400
 
 
+def test_name_based_epg_match_for_channel_without_tvgid(tmp_path, monkeypatch):
+    # A channel with no tvg-id (like a real HDHomeRun/OTA channel)…
+    playlist = '#EXTM3U\n#EXTINF:-1,BBC One HD\nhttp://x/bbc\n'
+    epg_xml = (
+        b'<?xml version="1.0"?><tv>'
+        b'<channel id="bbc1.uk"><display-name>BBC One</display-name></channel>'
+        b'<programme start="20260101060000 +0000" channel="bbc1.uk"><title>News</title></programme>'
+        b'</tv>'
+    )
+    monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: playlist)
+    monkeypatch.setattr("tunaar.epg.fetch", lambda url, **k: epg_xml)
+
+    cfg = Config(
+        device_id="NAME1",
+        sources=[{"name": "OTA", "url": "http://x/l.m3u"}],
+        epg_urls=["http://x/guide.xml"],
+        epg_auto=False,
+        stream_mode="redirect",
+        path=str(tmp_path / "config.json"),
+    )
+    app = create_app(cfg)
+    client = app.test_client()
+
+    status = client.get("/api/status").get_json()
+    # …gets matched to the guide by name, so the guide is populated.
+    assert status["epg"]["matched"] == 1
+    assert status["epg"]["programmes"] == 1
+    chan = client.get("/api/channels").get_json()[0]
+    assert chan["tvg_id"] == "bbc1.uk"  # filled in by name match
+
+
 def test_set_epg_urls_and_toggle_auto(client, app):
     resp = client.post(
         "/api/epg", json={"epg_urls": ["http://manual/g.xml"], "epg_auto": False}

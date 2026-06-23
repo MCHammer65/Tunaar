@@ -64,13 +64,17 @@
     <div id="settings" class="settings" hidden>
 
       <div class="panel">
-        <h3>IPTV sources</h3>
-        <p class="hint">Add one or more M3U playlist URLs. Channels from all sources are merged.</p>
+        <h3>Sources</h3>
+        <p class="hint">Add M3U playlists or a real HDHomeRun device — channels from all sources are merged into one lineup.</p>
         <div id="source-list" class="chips"></div>
         <div class="form-row">
-          <input id="src-name" class="inp" placeholder="Name (optional)" style="flex:0 0 150px">
-          <input id="src-url" class="inp" placeholder="https://provider/playlist.m3u" style="flex:1">
-          <input id="src-group" class="inp" placeholder="Force group (optional)" style="flex:0 0 160px">
+          <select id="src-type" class="inp" style="flex:0 0 140px">
+            <option value="m3u">M3U playlist</option>
+            <option value="hdhr">HDHomeRun</option>
+          </select>
+          <input id="src-name" class="inp" placeholder="Name (optional)" style="flex:0 0 130px">
+          <input id="src-url" class="inp" placeholder="https://provider/playlist.m3u  (or http://hdhomerun-ip)" style="flex:1">
+          <input id="src-group" class="inp" placeholder="Force group (optional)" style="flex:0 0 150px">
           <button id="src-add" class="btn" type="button">Add</button>
         </div>
       </div>
@@ -207,7 +211,8 @@
       const sl = $('source-list');
       sl.innerHTML = cfg.sources.length
         ? cfg.sources.map((s, i) =>
-            `<span class="chip">${esc(s.name || s.url)}${s.group ? ` <em>→ ${esc(s.group)}</em>` : ''}` +
+            `<span class="chip">${s.type === 'hdhr' ? '📡 ' : ''}${esc(s.name || s.url)}` +
+            `${s.group ? ` <em>→ ${esc(s.group)}</em>` : ''}` +
             ` <a data-i="${i}" class="x" title="Remove">✕</a></span>`).join('')
         : '<span class="hint">No sources yet.</span>';
       sl.querySelectorAll('a.x').forEach(a => a.addEventListener('click', async () => {
@@ -237,7 +242,7 @@
       if (!url) return;
       await fetch('/api/sources', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: $('src-name').value.trim(), url, group: $('src-group').value.trim() })
+        body: JSON.stringify({ name: $('src-name').value.trim(), url, group: $('src-group').value.trim(), type: $('src-type').value })
       });
       $('src-name').value = $('src-url').value = $('src-group').value = '';
       loadConfig(); afterChange();

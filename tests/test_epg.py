@@ -29,6 +29,17 @@ def test_build_filtered_to_lineup():
     assert b"movies.us" not in result.xml
 
 
+def test_norm_name():
+    assert epg.norm_name("BBC One HD") == epg.norm_name("BBC ONE")
+    assert epg.norm_name("Channel 4 (1080p)") == "channel4"
+
+
+def test_name_to_id_index():
+    doc = b'<tv><channel id="bbc1.uk"><display-name>BBC One</display-name></channel></tv>'
+    result = epg.build(doc)
+    assert result.name_to_id.get("bbcone") == "bbc1.uk"
+
+
 def test_build_many_merges_and_dedupes():
     doc_a = b'<tv><channel id="a"/><programme channel="a"><title>X</title></programme></tv>'
     doc_b = b'<tv><channel id="a"/><channel id="b"/><programme channel="b"><title>Y</title></programme></tv>'
