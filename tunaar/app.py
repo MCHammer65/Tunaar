@@ -26,7 +26,7 @@ from flask import (
     stream_with_context,
 )
 
-from . import __version__, epg, m3u, proxy
+from . import __version__, epg, m3u, presets, proxy
 from .config import Config
 from .logbus import BusHandler, LogBus
 
@@ -518,9 +518,44 @@ def create_app(config: Config | None = None) -> Flask:
             }
         )
 
+    @app.get("/api/presets")
+    def api_presets() -> Response:
+        existing = {(s.get("url") or "").strip() for s in config.sources}
+        return jsonify(
+            [
+                {
+                    "id": p["id"],
+                    "label": p["label"],
+                    "region": p["region"],
+                    "added": p["url"] in existing,
+                }
+                for p in presets.PRESETS
+            ]
+        )
+
     @app.post("/api/sources")
     def api_add_source() -> Response:
         body = request.get_json(silent=True) or {}
+
+        # One-click preset: look up a curated source by id.
+        preset_id = (body.get("preset") or "").strip()
+        if preset_id:
+            preset = presets.get(preset_id)
+            if not preset:
+                return jsonify({"error": f"unknown preset {preset_id!r}"}), 400
+            if any((s.get("url") or "").strip() == preset["url"] for s in config.sources):
+                return jsonify({"ok": True, "sources": config.sources})  # idempotent
+            config.sources.append(
+                {
+                    "name": preset["name"],
+                    "url": preset["url"],
+                    "group": preset["group"],
+                    "type": "m3u",
+                }
+            )
+            _save_and_refresh()
+            return jsonify({"ok": True, "sources": config.sources})
+
         url = (body.get("url") or "").strip()
         if not url:
             return jsonify({"error": "url is required"}), 400

@@ -66,6 +66,8 @@
       <div class="panel">
         <h3>Sources</h3>
         <p class="hint">Add M3U playlists or a real HDHomeRun device — channels from all sources are merged into one lineup.</p>
+        <p class="hint">Quick add free providers (guide auto-detected):</p>
+        <div id="preset-list" class="form-row" style="flex-wrap:wrap;gap:6px;margin-top:0"></div>
         <div id="source-list" class="chips"></div>
         <div class="form-row">
           <select id="src-type" class="inp" style="flex:0 0 140px">
@@ -200,8 +202,26 @@
       const el = $('settings');
       el.hidden = !el.hidden;
       $('settings-toggle').textContent = el.hidden ? 'Show ▾' : 'Hide ▴';
-      if (!el.hidden) loadConfig();
+      if (!el.hidden) { loadConfig(); loadPresets(); }
     });
+
+    async function loadPresets() {
+      const pl = $('preset-list');
+      if (!pl) return;
+      let presets;
+      try { presets = await (await fetch('/api/presets')).json(); } catch (e) { return; }
+      pl.innerHTML = presets.map(p =>
+        `<button class="btn-ghost" type="button" data-id="${esc(p.id)}" ${p.added ? 'disabled' : ''}>` +
+        `${p.added ? '✓ ' : '+ '}${esc(p.label)}</button>`).join('');
+      pl.querySelectorAll('button[data-id]').forEach(b => b.addEventListener('click', async () => {
+        b.disabled = true;
+        await fetch('/api/sources', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preset: b.dataset.id })
+        });
+        loadConfig(); loadPresets(); afterChange();
+      }));
+    }
 
     async function loadConfig() {
       let cfg;
@@ -217,7 +237,7 @@
         : '<span class="hint">No sources yet.</span>';
       sl.querySelectorAll('a.x').forEach(a => a.addEventListener('click', async () => {
         await fetch('/api/sources/' + a.dataset.i, { method: 'DELETE' });
-        loadConfig(); afterChange();
+        loadConfig(); loadPresets(); afterChange();
       }));
 
       // epg
@@ -245,7 +265,7 @@
         body: JSON.stringify({ name: $('src-name').value.trim(), url, group: $('src-group').value.trim(), type: $('src-type').value })
       });
       $('src-name').value = $('src-url').value = $('src-group').value = '';
-      loadConfig(); afterChange();
+      loadConfig(); loadPresets(); afterChange();
     });
 
     $('epg-save').addEventListener('click', async () => {

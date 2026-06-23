@@ -106,6 +106,32 @@ def test_name_based_epg_match_for_channel_without_tvgid(tmp_path, monkeypatch):
     assert chan["tvg_id"] == "bbc1.uk"  # filled in by name match
 
 
+def test_presets_listed_with_added_flag(client):
+    presets = client.get("/api/presets").get_json()
+    ids = {p["id"] for p in presets}
+    assert {"samsung-gb", "pluto-gb", "samsung-us", "pluto-us"} <= ids
+    assert all(p["added"] is False for p in presets)  # none added yet
+    assert {p["region"] for p in presets} == {"GB", "US"}
+
+
+def test_add_preset_creates_source_and_marks_added(client):
+    r = client.post("/api/sources", json={"preset": "samsung-gb"})
+    sources = r.get_json()["sources"]
+    assert sources[-1]["url"] == "https://i.mjh.nz/SamsungTVPlus/gb.m3u8"
+    assert sources[-1]["group"] == "Samsung TV Plus"
+    # Now the preset is reported as added and re-adding is idempotent.
+    presets = {p["id"]: p for p in client.get("/api/presets").get_json()}
+    assert presets["samsung-gb"]["added"] is True
+    client.post("/api/sources", json={"preset": "samsung-gb"})
+    urls = [s["url"] for s in client.get("/api/config").get_json()["sources"]]
+    assert urls.count("https://i.mjh.nz/SamsungTVPlus/gb.m3u8") == 1
+
+
+def test_add_unknown_preset_rejected(client):
+    r = client.post("/api/sources", json={"preset": "nope"})
+    assert r.status_code == 400
+
+
 def test_set_epg_urls_and_toggle_auto(client, app):
     resp = client.post(
         "/api/epg", json={"epg_urls": ["http://manual/g.xml"], "epg_auto": False}
