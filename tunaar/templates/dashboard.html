@@ -108,6 +108,8 @@
           <input id="epg-auto" type="checkbox">
           <span>Auto-detect guide from playlist (<code>url-tvg</code>)</span>
         </label>
+        <p class="hint">Quick add a regional guide:</p>
+        <div id="epg-presets" class="form-row" style="flex-wrap:wrap;gap:6px;margin-top:0"></div>
         <p class="hint">Extra XMLTV URLs (one per line) are merged with the auto-detected guide.</p>
         <textarea id="epg-urls" class="inp" rows="3" placeholder="https://example.com/epg.xml.gz"></textarea>
         <div id="epg-discovered" class="hint"></div>
@@ -235,7 +237,7 @@
       const el = $('settings');
       el.hidden = !el.hidden;
       $('settings-toggle').textContent = el.hidden ? 'Show ▾' : 'Hide ▴';
-      if (!el.hidden) { loadConfig(); loadPresets(); loadGuideOptions(); loadMapList(); }
+      if (!el.hidden) { loadConfig(); loadPresets(); loadEpgPresets(); loadGuideOptions(); loadMapList(); }
     });
 
     async function loadPresets() {
@@ -253,6 +255,23 @@
           body: JSON.stringify({ preset: b.dataset.id })
         });
         loadConfig(); loadPresets(); afterChange();
+      }));
+    }
+
+    async function loadEpgPresets() {
+      const el = $('epg-presets');
+      if (!el) return;
+      let list;
+      try { list = await (await fetch('/api/epg-presets')).json(); } catch (e) { return; }
+      el.innerHTML = list.map(p =>
+        `<button class="btn-ghost" type="button" data-id="${esc(p.id)}" ${p.added ? 'disabled' : ''}>${p.added ? '✓ ' : '+ '}${esc(p.label)}</button>`).join('');
+      el.querySelectorAll('button[data-id]').forEach(b => b.addEventListener('click', async () => {
+        b.disabled = true;
+        await fetch('/api/epg/preset', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: b.dataset.id })
+        });
+        loadConfig(); loadEpgPresets(); afterChange();
       }));
     }
 

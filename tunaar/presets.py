@@ -173,3 +173,28 @@ def get(preset_id: str) -> dict | None:
         if p["id"] == preset_id:
             return p
     return None
+
+
+# One-click XMLTV guide presets (epgshare01 per-country files). These cover
+# broadcast/OTA and many IPTV channels by name. Tunaar fetches them with a
+# browser user-agent and skips any that are unreachable, so a dud is harmless.
+EPG_PRESETS: list[dict] = [
+    {"id": "epg-uk", "label": "UK guide (Freeview etc.)",
+     "url": "https://epgshare01.online/epgshare01/epg_ripper_UK1.xml.gz"},
+    {"id": "epg-us", "label": "US guide",
+     "url": "https://epgshare01.online/epgshare01/epg_ripper_US1.xml.gz"},
+    {"id": "epg-ca", "label": "Canada guide",
+     "url": "https://epgshare01.online/epgshare01/epg_ripper_CA1.xml.gz"},
+    {"id": "epg-fr", "label": "France guide",
+     "url": "https://epgshare01.online/epgshare01/epg_ripper_FR1.xml.gz"},
+    {"id": "epg-de", "label": "Germany guide",
+     "url": "https://epgshare01.online/epgshare01/epg_ripper_DE1.xml.gz"},
+]
+
+
+def epg_get(preset_id: str) -> dict | None:
+    """Return the EPG preset with ``id == preset_id``, or ``None``."""
+    for p in EPG_PRESETS:
+        if p["id"] == preset_id:
+            return p
+    return None
