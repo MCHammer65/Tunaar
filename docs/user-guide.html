@@ -108,6 +108,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
 <div class="layout">
   <aside class="toc" id="toc">
     <a href="#start">Getting started</a>
+    <a href="#wizard">Setup wizard</a>
     <a href="#dashboard">The dashboard</a>
     <a href="#sources">Adding channels</a>
     <a href="#presets">Free providers</a>
@@ -139,6 +140,17 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
          container is up (<code>./tunaar.sh status</code>) and you're using the host's LAN IP.</p>
     </div>
 
+    <h2 id="wizard">Setup wizard (easiest start)</h2>
+    <p>On a fresh install the <b>Setup wizard</b> opens automatically and walks you through everything in
+       four steps. You can re-run it anytime from the <b>Setup wizard</b> link in the top nav.</p>
+    <ol class="steps">
+      <li><h3>Add channels</h3><p>Click the free-provider presets you want, and/or add your own M3U list or a real HDHomeRun.</p></li>
+      <li><h3>Guide / EPG</h3><p>Leave auto-detect on; add an extra XMLTV only if a source needs its own guide.</p></li>
+      <li><h3>Trim groups</h3><p>Untick what you don't watch. A live counter warns (turns red) if the lineup is too big for Plex — aim for a few hundred.</p></li>
+      <li><h3>Connect to Plex</h3><p>Copy the tuner and <code>/epg.xml</code> URLs straight from the final step into Plex's DVR setup.</p></li>
+    </ol>
+    <div class="note">Prefer to do it manually? Every wizard step maps to a panel under <b>Settings</b> — the sections below cover each one.</div>
+
     <h2 id="dashboard">The dashboard at a glance</h2>
     <table>
       <tr><th>Area</th><th>What it's for</th></tr>
@@ -156,7 +168,8 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
       <li><b>M3U playlist</b> — set type to <span class="tag">M3U playlist</span>, paste the playlist URL. Optionally set a name and a "Force group".</li>
       <li><b>Real HDHomeRun</b> — set type to <span class="tag">HDHomeRun</span>, enter the device address. <a href="#hdhr">See below.</a></li>
     </ul>
-    <div class="note">The optional <b>Force group</b> field overrides every channel's category from that source — handy for keeping providers tidy in Plex (e.g. all Pluto channels under "Pluto TV").</div>
+    <div class="note">The optional <b>Force group</b> field overrides every channel's category from that source — handy for keeping providers tidy in Plex (e.g. all Pluto channels under "Pluto TV"). Use <b>Max ch.</b> to cap how many channels a source contributes (great for taming huge lists at the source).</div>
+    <div class="note ok">Adding an <b>Xtream-style</b> playlist (<code>…/get.php?username=&amp;password=</code>)? Tunaar auto-detects the matching <code>xmltv.php</code> guide and adds it for you — no need to find the EPG URL.</div>
 
     <h2 id="presets">Free providers (one click)</h2>
     <p>Under Sources you'll find a <b>Quick add free providers</b> row. Click a button to add that
@@ -187,6 +200,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
     <p>Open <b>Settings → EPG</b>.</p>
     <ul>
       <li><b>Auto-detect</b> (on by default): uses the guide URL advertised inside each playlist — most providers include one, so the presets "just work".</li>
+      <li><b>Quick-add guides</b>: one-click buttons for regional XMLTV guides (UK/US/CA/FR/DE).</li>
       <li><b>Manual URLs</b>: paste extra XMLTV guide links (one per line), e.g. a UK Freeview guide for OTA channels.</li>
       <li><b>Name matching</b>: channels without a guide ID are matched to guide entries by name (HD/quality differences ignored), so OTA/HDHomeRun channels get data automatically.</li>
     </ul>
