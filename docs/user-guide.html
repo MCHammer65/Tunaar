@@ -113,6 +113,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
     <a href="#presets">Free providers</a>
     <a href="#hdhr">Real HDHomeRun</a>
     <a href="#guide">Guide / EPG</a>
+    <a href="#mapping">Manual EPG mapping</a>
     <a href="#groups">Groups</a>
     <a href="#plex">Add to Plex</a>
     <a href="#streaming">Stream modes</a>
@@ -190,6 +191,20 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
       <li><b>Name matching</b>: channels without a guide ID are matched to guide entries by name (HD/quality differences ignored), so OTA/HDHomeRun channels get data automatically.</li>
     </ul>
     <p>Tunaar serves the merged result at <code>/epg.xml</code> — that's the single URL you give Plex.</p>
+    <div class="note">Paste <b>one URL per line</b> (Tunaar also splits multiple URLs pasted on one line). If a source is unreachable it's skipped with a notice rather than wiping the whole guide, and guides are fetched with a browser user-agent so hosts that block bots still work.</div>
+
+    <h2 id="mapping">Manual EPG mapping</h2>
+    <p>Some channels won't match the guide automatically — most often <b>regional Freeview</b> from a real
+       HDHomeRun, where the tuner reports <em>"BBC One South"</em> but the guide calls it <em>"BBC One"</em>.
+       Plex can't fix this (it won't mix its postcode guide with XMLTV in one setup), so Tunaar lets you
+       map them by hand.</p>
+    <ol class="steps">
+      <li><h3>Load a guide first</h3><p>The picker is populated from the channels in your loaded guide, so make sure your EPG is working (a real programme count on the dashboard) before mapping.</p></li>
+      <li><h3>Open the panel</h3><p><b>Settings → Manual EPG mapping</b>. Leave <span class="tag">Unmatched only</span> ticked to see just the channels with no guide. Use the search box to find one fast.</p></li>
+      <li><h3>Pick the guide entry</h3><p>Start typing in a channel's box and choose the matching guide channel from the dropdown (shown as <code>Name · id</code>). It saves instantly and is marked <em>(manual)</em>.</p></li>
+      <li><h3>Done — it sticks</h3><p>Manual mappings are saved and <b>always win</b> over auto-matching. Hit <span class="tag">Clear</span> on a row to remove one. Refresh the Plex guide afterwards.</p></li>
+    </ol>
+    <div class="note">Tip: map the mainstream channels you actually watch — you don't need to map every obscure one. Trim the rest with Groups.</div>
 
     <h2 id="groups">Groups (show / hide)</h2>
     <p>Open <b>Settings → Groups</b>. Every group is shown by default — <b>untick</b> any you don't want
@@ -229,6 +244,8 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
       <tr><td>Plex doesn't auto-find the tuner</td><td>Use host networking, or add it manually by IP in Plex DVR setup.</td></tr>
       <tr><td>A preset added 0 channels</td><td>The community URL may have changed — verify it loads in a browser from your network.</td></tr>
       <tr><td>Channels have no guide</td><td>Check the EPG match count; add a guide URL for that region; OTA channels rely on name matching.</td></tr>
+      <tr><td>Regional channel won't match the guide</td><td>Use <b>Settings → Manual EPG mapping</b> to pick the right guide entry by hand (see above).</td></tr>
+      <tr><td>A guide URL returns 404</td><td>Paste one URL per line with no extra text; many EPG hosts only serve real paths — verify it loads in a browser.</td></tr>
       <tr><td>A channel buffers / won't play</td><td>Switch that setup to <b>ffmpeg</b> stream mode; test it from <b>Console</b>.</td></tr>
       <tr><td>Settings reset after update</td><td>Your <code>/config</code> volume isn't persisted — re-run with a bind mount (<code>TUNAAR_VOLUME=…</code>).</td></tr>
       <tr><td>"Docker socket not mounted"</td><td>Expected unless you opted in. Use Watchtower or <code>TUNAAR_SELF_UPDATE=1</code> — see Install Guide.</td></tr>
