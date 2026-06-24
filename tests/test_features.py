@@ -260,6 +260,44 @@ def test_epg_preset_unknown_rejected(client):
     assert client.post("/api/epg/preset", json={"id": "nope"}).status_code == 400
 
 
+def test_license_trial_and_gating(tmp_path, monkeypatch):
+    monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: PLAYLIST)
+    # Expired trial: premium endpoints return 402, core stays open.
+    cfg = Config(
+        device_id="LIC1",
+        sources=[{"name": "M", "url": "http://x/l.m3u"}],
+        trial_start=1.0,  # 1970 → trial long expired
+        stream_mode="redirect",
+        path=str(tmp_path / "config.json"),
+    )
+    client = create_app(cfg).test_client()
+    assert client.get("/api/status").get_json()["license"]["state"] == "expired"
+    # Premium: presets, hdhr, epg preset, mapping, bulk test → 402.
+    assert client.post("/api/sources", json={"preset": "samsung-gb"}).status_code == 402
+    assert client.post("/api/sources", json={"url": "http://h", "type": "hdhr"}).status_code == 402
+    assert client.post("/api/epg/preset", json={"id": "epg-uk"}).status_code == 402
+    assert client.post("/api/epg/map", json={"name": "CNN", "tvg_id": "x"}).status_code == 402
+    assert client.post("/api/test/all").status_code == 402
+    # Core stays free: plain M3U source, EPG urls, groups.
+    assert client.post("/api/sources", json={"url": "http://x/2.m3u"}).status_code == 200
+    assert client.post("/api/groups", json={"exclude": ["News"]}).status_code == 200
+
+
+def test_license_active_trial_allows_premium(tmp_path, monkeypatch):
+    monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: PLAYLIST)
+    cfg = Config(
+        device_id="LIC2", sources=[], stream_mode="redirect",
+        path=str(tmp_path / "config.json"),  # trial_start seeded to now on load
+    )
+    client = create_app(cfg).test_client()
+    assert client.get("/api/status").get_json()["license"]["state"] == "trial"
+    assert client.post("/api/epg/preset", json={"id": "epg-uk"}).status_code == 200
+
+
+def test_invalid_license_key_rejected(client):
+    assert client.post("/api/license", json={"key": "not.a.key"}).status_code == 400
+
+
 def test_bulk_stream_health_check(client, monkeypatch):
     # CNN ok, ESPN dead, Orphan ok (per probe stub keyed on URL).
     def fake_probe(url, **k):
