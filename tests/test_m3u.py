@@ -83,6 +83,23 @@ def test_load_sources_handles_hdhr_type(monkeypatch):
     assert pl.channels[0].group == "Freeview"  # default group for OTA
 
 
+def test_load_sources_respects_limit(monkeypatch):
+    playlist = "#EXTM3U\n" + "".join(
+        f"#EXTINF:-1,Ch{i}\nhttp://x/{i}\n" for i in range(10)
+    )
+    monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: playlist)
+    pl = m3u.load_sources([{"url": "http://x/l.m3u", "limit": 3}])
+    assert len(pl.channels) == 3
+
+
+def test_derive_epg_url_from_xtream():
+    got = m3u.derive_epg_url("http://host:8080/get.php?username=u&password=p&type=m3u_plus")
+    assert got == "http://host:8080/xmltv.php?username=u&password=p"
+    # Non-Xtream URLs return None.
+    assert m3u.derive_epg_url("https://provider/playlist.m3u8") is None
+    assert m3u.derive_epg_url("http://host/get.php?type=m3u") is None  # no creds
+
+
 def test_load_sources_merges_and_overrides_group(monkeypatch):
     a = '#EXTM3U url-tvg="http://epg/a.xml"\n#EXTINF:-1,A\nhttp://a/1\n'
     b = '#EXTINF:-1 group-title="Sports",B\nhttp://b/1\n'

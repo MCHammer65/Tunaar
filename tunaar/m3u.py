@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import urllib.parse
 from dataclasses import dataclass, field
 
 import requests
@@ -130,6 +131,28 @@ def load(source: str, *, user_agent: str = "Tunaar", timeout: int = 30) -> list[
     return parse(text)
 
 
+def derive_epg_url(m3u_url: str) -> str | None:
+    """Derive an Xtream Codes XMLTV URL from a ``get.php`` playlist URL.
+
+    Xtream/IPTV panels expose the playlist at ``.../get.php?username=..&password=..``
+    and the matching guide at ``.../xmltv.php?username=..&password=..``. Returns
+    the guide URL when the input matches that pattern, else ``None``.
+    """
+    if "get.php" not in m3u_url.lower():
+        return None
+    split = urllib.parse.urlsplit(m3u_url)
+    if "get.php" not in split.path.lower():
+        return None
+    qs = urllib.parse.parse_qs(split.query)
+    user = (qs.get("username") or [""])[0]
+    pwd = (qs.get("password") or [""])[0]
+    if not user or not pwd:
+        return None
+    path = re.sub(r"get\.php$", "xmltv.php", split.path, flags=re.IGNORECASE)
+    query = urllib.parse.urlencode({"username": user, "password": pwd})
+    return urllib.parse.urlunsplit((split.scheme, split.netloc, path, query, ""))
+
+
 def load_sources(
     sources: list[dict],
     *,
@@ -154,12 +177,18 @@ def load_sources(
         name = src.get("name") or url
         override = (src.get("group") or "").strip()
         stype = (src.get("type") or "m3u").lower()
+        try:
+            limit = int(src.get("limit") or 0)
+        except (TypeError, ValueError):
+            limit = 0
 
         if stype == "hdhr":
             chans = load_hdhr(url, user_agent=user_agent, timeout=timeout)
             for ch in chans:
                 ch.source = name
                 ch.group = override or "Freeview"
+            if limit > 0:
+                chans = chans[:limit]
             merged.extend(chans)
             continue
 
@@ -168,7 +197,8 @@ def load_sources(
         if override:
             for ch in doc.channels:
                 ch.group = override
-        merged.extend(doc.channels)
+        chans = doc.channels[:limit] if limit > 0 else doc.channels
+        merged.extend(chans)
         epg_urls.extend(doc.epg_urls)
 
     assign_numbers(merged)

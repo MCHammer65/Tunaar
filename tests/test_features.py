@@ -230,6 +230,18 @@ def test_add_unknown_preset_rejected(client):
     assert r.status_code == 400
 
 
+def test_add_xtream_source_auto_derives_epg(client, app):
+    url = "http://host:8080/get.php?username=u&password=p&type=m3u_plus"
+    r = client.post("/api/sources", json={"url": url}).get_json()
+    assert r["derived_epg"] == "http://host:8080/xmltv.php?username=u&password=p"
+    assert "http://host:8080/xmltv.php?username=u&password=p" in app.config["TUNAAR"].epg_urls
+
+
+def test_add_source_with_limit_persists(client, app):
+    client.post("/api/sources", json={"url": "http://x/2.m3u", "limit": 50})
+    assert app.config["TUNAAR"].sources[-1]["limit"] == 50
+
+
 def test_docs_served_and_traversal_blocked(client):
     assert client.get("/docs/user-guide.html").status_code == 200
     assert client.get("/docs/install.html").status_code == 200
