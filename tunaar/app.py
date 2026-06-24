@@ -579,6 +579,26 @@ def create_app(config: Config | None = None) -> Flask:
         _save_and_refresh()
         return jsonify({"ok": True, "setup_complete": config.setup_complete})
 
+    @app.get("/api/epg-presets")
+    def api_epg_presets() -> Response:
+        return jsonify(
+            [
+                {"id": p["id"], "label": p["label"], "added": p["url"] in config.epg_urls}
+                for p in presets.EPG_PRESETS
+            ]
+        )
+
+    @app.post("/api/epg/preset")
+    def api_add_epg_preset() -> Response:
+        body = request.get_json(silent=True) or {}
+        preset = presets.epg_get((body.get("id") or "").strip())
+        if not preset:
+            return jsonify({"error": "unknown epg preset"}), 400
+        if preset["url"] not in config.epg_urls:
+            config.epg_urls.append(preset["url"])
+            _save_and_refresh()
+        return jsonify({"ok": True, "epg_urls": config.epg_urls})
+
     @app.get("/api/epg/guide-channels")
     def api_guide_channels() -> Response:
         guide.get()  # ensure the guide is built so the index is populated

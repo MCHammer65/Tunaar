@@ -242,6 +242,24 @@ def test_add_source_with_limit_persists(client, app):
     assert app.config["TUNAAR"].sources[-1]["limit"] == 50
 
 
+def test_epg_presets_listed_and_added(client, app):
+    presets = client.get("/api/epg-presets").get_json()
+    ids = {p["id"] for p in presets}
+    assert "epg-uk" in ids
+    assert all(p["added"] is False for p in presets)
+    r = client.post("/api/epg/preset", json={"id": "epg-uk"})
+    assert r.status_code == 200
+    assert any("UK1" in u for u in app.config["TUNAAR"].epg_urls)
+    # Idempotent + now reported as added.
+    client.post("/api/epg/preset", json={"id": "epg-uk"})
+    assert sum("UK1" in u for u in app.config["TUNAAR"].epg_urls) == 1
+    assert {p["id"]: p["added"] for p in client.get("/api/epg-presets").get_json()}["epg-uk"] is True
+
+
+def test_epg_preset_unknown_rejected(client):
+    assert client.post("/api/epg/preset", json={"id": "nope"}).status_code == 400
+
+
 def test_docs_served_and_traversal_blocked(client):
     assert client.get("/docs/user-guide.html").status_code == 200
     assert client.get("/docs/install.html").status_code == 200
