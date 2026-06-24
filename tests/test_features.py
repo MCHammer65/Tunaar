@@ -260,25 +260,43 @@ def test_epg_preset_unknown_rejected(client):
     assert client.post("/api/epg/preset", json={"id": "nope"}).status_code == 400
 
 
-def test_license_trial_and_gating(tmp_path, monkeypatch):
+def test_license_nag_default_blocks_nothing(tmp_path, monkeypatch):
     monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: PLAYLIST)
-    # Expired trial: premium endpoints return 402, core stays open.
+    # Default enforcement is "nag": expired trial still allows everything.
+    cfg = Config(
+        device_id="LIC0",
+        sources=[{"name": "M", "url": "http://x/l.m3u"}],
+        trial_start=1.0,  # trial long expired
+        stream_mode="redirect",
+        path=str(tmp_path / "config.json"),
+    )
+    client = create_app(cfg).test_client()
+    status = client.get("/api/status").get_json()["license"]
+    assert status["state"] == "expired" and status["enforce"] == "nag"
+    assert client.post("/api/epg/preset", json={"id": "epg-uk"}).status_code == 200
+    assert client.post("/api/epg/map", json={"name": "CNN", "tvg_id": "x"}).status_code == 200
+    assert client.post("/api/test/all").status_code == 200
+
+
+def test_license_premium_mode_gates_extras(tmp_path, monkeypatch):
+    monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: PLAYLIST)
     cfg = Config(
         device_id="LIC1",
         sources=[{"name": "M", "url": "http://x/l.m3u"}],
-        trial_start=1.0,  # 1970 → trial long expired
+        trial_start=1.0,
+        license_enforce="premium",  # opt into gating
         stream_mode="redirect",
         path=str(tmp_path / "config.json"),
     )
     client = create_app(cfg).test_client()
     assert client.get("/api/status").get_json()["license"]["state"] == "expired"
-    # Premium: presets, hdhr, epg preset, mapping, bulk test → 402.
+    # Premium extras → 402.
     assert client.post("/api/sources", json={"preset": "samsung-gb"}).status_code == 402
     assert client.post("/api/sources", json={"url": "http://h", "type": "hdhr"}).status_code == 402
     assert client.post("/api/epg/preset", json={"id": "epg-uk"}).status_code == 402
     assert client.post("/api/epg/map", json={"name": "CNN", "tvg_id": "x"}).status_code == 402
     assert client.post("/api/test/all").status_code == 402
-    # Core stays free: plain M3U source, EPG urls, groups.
+    # Core stays free even in premium mode.
     assert client.post("/api/sources", json={"url": "http://x/2.m3u"}).status_code == 200
     assert client.post("/api/groups", json={"exclude": ["News"]}).status_code == 200
 

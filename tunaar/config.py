@@ -45,6 +45,7 @@ DEFAULTS: dict = {
     "setup_complete": False,  # first-run wizard shown until dismissed/finished
     "license_key": "",  # Ed25519-signed license token (empty = trial/unlicensed)
     "trial_start": 0.0,  # unix timestamp of first run; seeds the 30-day trial
+    "license_enforce": "nag",  # "nag" (banner only) | "premium" (gate extras)
 }
 
 # Managed as structured lists via the dashboard, not via env vars.
@@ -108,6 +109,7 @@ class Config:
     setup_complete: bool = DEFAULTS["setup_complete"]
     license_key: str = DEFAULTS["license_key"]
     trial_start: float = DEFAULTS["trial_start"]
+    license_enforce: str = DEFAULTS["license_enforce"]
 
     path: str = field(default="config.json", repr=False, compare=False)
 
