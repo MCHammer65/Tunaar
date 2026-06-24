@@ -260,6 +260,17 @@ def test_epg_preset_unknown_rejected(client):
     assert client.post("/api/epg/preset", json={"id": "nope"}).status_code == 400
 
 
+def test_bulk_stream_health_check(client, monkeypatch):
+    # CNN ok, ESPN dead, Orphan ok (per probe stub keyed on URL).
+    def fake_probe(url, **k):
+        return {"ok": "espn" not in url, "status": 200 if "espn" not in url else 502}
+    monkeypatch.setattr("tunaar.proxy.probe", fake_probe)
+    r = client.post("/api/test/all").get_json()
+    assert r["tested"] == 3
+    assert r["ok"] == 2
+    assert [f["name"] for f in r["failed"]] == ["ESPN"]
+
+
 def test_docs_served_and_traversal_blocked(client):
     assert client.get("/docs/user-guide.html").status_code == 200
     assert client.get("/docs/install.html").status_code == 200
