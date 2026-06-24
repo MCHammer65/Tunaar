@@ -11,7 +11,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Pinned (not github.repository) so a repo rename doesn't change the image
+  # path out from under existing installs that pull ghcr.io/mchammer65/plexiptv.
+  IMAGE_NAME: mchammer65/plexiptv
 
 jobs:
   build-and-push:
