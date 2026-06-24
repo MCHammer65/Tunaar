@@ -147,9 +147,8 @@
           <input id="lic-key" class="inp" placeholder="Paste your license key" style="flex:1">
           <button id="lic-save" class="btn" type="button">Activate</button>
         </div>
-        <p class="hint">30-day free trial — no key needed. After that, premium conveniences
-          (one-click presets, HDHomeRun ingest, manual mapping, health check) need a license;
-          your channels keep streaming either way.</p>
+        <p class="hint">30-day free trial — no key needed. A license supports ongoing development;
+          your channels always keep streaming.</p>
       </div>
 
     </div>
@@ -342,8 +341,12 @@
       } else {
         b.style.display = 'block';
         b.style.borderColor = ''; b.style.color = '';
-        b.innerHTML = 'Your Tunaar trial has ended — channels keep streaming, but premium features are locked. Add a license below.';
-        if (ls) ls.textContent = 'Trial ended — premium features locked.';
+        b.innerHTML = lic.enforce === 'premium'
+          ? 'Your Tunaar trial has ended — channels keep streaming, but premium features are locked. Add a license below.'
+          : 'Your Tunaar trial has ended — everything still works. Please consider a license to support development. 🙏';
+        if (ls) ls.textContent = lic.enforce === 'premium'
+          ? 'Trial ended — premium features locked.'
+          : 'Trial ended — please consider a license.';
       }
     }
 

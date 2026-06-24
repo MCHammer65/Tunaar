@@ -587,11 +587,19 @@ def create_app(config: Config | None = None) -> Flask:
         _refresh()
 
     def _license() -> dict:
-        return licensing.evaluate(config.license_key, config.trial_start)
+        state = licensing.evaluate(config.license_key, config.trial_start)
+        state["enforce"] = config.license_enforce
+        return state
 
     def _require_premium():
-        """Gate premium features. Gentle: core streaming/config stays free."""
-        if not _license()["premium"]:
+        """Gate premium features only in 'premium' enforcement mode.
+
+        Default is 'nag': nothing is blocked — the dashboard just shows a banner
+        inviting a license. Set license_enforce='premium' to gate extras.
+        """
+        if config.license_enforce != "premium":
+            return None
+        if not licensing.evaluate(config.license_key, config.trial_start)["premium"]:
             return jsonify({
                 "error": "premium_required",
                 "message": "Your Tunaar trial has ended — a license unlocks this feature.",
