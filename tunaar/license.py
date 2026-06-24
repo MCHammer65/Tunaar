@@ -33,6 +33,7 @@ from . import _ed25519
 PUBLIC_KEY_HEX = ""
 
 TRIAL_DAYS = 30
+GRACE_DAYS = 14  # keep an expired annual license working briefly during renewal
 DAY = 86400
 
 # Verification is pure-Python (a few ms) but evaluate() runs on every status
@@ -117,7 +118,17 @@ def evaluate(license_key: str, trial_start: float, now: float | None = None) -> 
                 "days_left": days_left,
                 "premium": True,
             }
-        # A signed-but-expired key falls through to trial/expired below.
+        # Expired annual key: keep working through a short grace window so a
+        # renewal that lands a little late doesn't interrupt the user.
+        if now < exp + GRACE_DAYS * DAY:
+            return {
+                "state": "grace",
+                "plan": payload.get("plan", "licensed"),
+                "email": payload.get("email", ""),
+                "days_left": max(0, int((exp + GRACE_DAYS * DAY - now) / DAY)),
+                "premium": True,
+            }
+        # Fully expired: fall through to trial/expired below.
 
     trial_end = (trial_start or now) + TRIAL_DAYS * DAY
     if now < trial_end:

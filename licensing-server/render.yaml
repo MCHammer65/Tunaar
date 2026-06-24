@@ -1,0 +1,30 @@
+# Render blueprint for the Tunaar licensing webhook.
+# In Render: New → Blueprint → point at this repo. Set the secret env vars
+# (marked sync:false) in the dashboard after the first deploy.
+services:
+  - type: web
+    name: tunaar-webhook
+    runtime: docker
+    dockerfilePath: ./licensing-server/Dockerfile
+    dockerContext: .          # build from repo root so `tunaar` is included
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: TUNAAR_LICENSE_PRIVKEY
+        sync: false
+      - key: LS_WEBHOOK_SECRET
+        sync: false
+      - key: LS_VARIANT_LIFETIME
+        sync: false
+      - key: TUNAAR_ANNUAL_DAYS
+        value: "365"
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false

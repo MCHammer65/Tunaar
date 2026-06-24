@@ -46,6 +46,7 @@ DEFAULTS: dict = {
     "license_key": "",  # Ed25519-signed license token (empty = trial/unlicensed)
     "trial_start": 0.0,  # unix timestamp of first run; seeds the 30-day trial
     "license_enforce": "nag",  # "nag" (banner only) | "premium" (gate extras)
+    "buy_url": "",  # checkout link shown on the dashboard "Buy a license" button
 }
 
 # Managed as structured lists via the dashboard, not via env vars.
@@ -110,6 +111,7 @@ class Config:
     license_key: str = DEFAULTS["license_key"]
     trial_start: float = DEFAULTS["trial_start"]
     license_enforce: str = DEFAULTS["license_enforce"]
+    buy_url: str = DEFAULTS["buy_url"]
 
     path: str = field(default="config.json", repr=False, compare=False)
 

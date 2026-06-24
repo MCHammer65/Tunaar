@@ -1,0 +1,33 @@
+# Fly.io config for the Tunaar licensing webhook.
+#
+# Deploy:
+#   fly launch --no-deploy --copy-config --name tunaar-webhook   # first time
+#   fly secrets set TUNAAR_LICENSE_PRIVKEY=... LS_WEBHOOK_SECRET=... \
+#                   LS_VARIANT_LIFETIME=... \
+#                   SMTP_HOST=... SMTP_USER=... SMTP_PASS=... SMTP_FROM=you@domain
+#   fly deploy --dockerfile licensing-server/Dockerfile
+#
+# Build from the repo root so the `tunaar` package is in the image context.
+
+app = "tunaar-webhook"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "licensing-server/Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
