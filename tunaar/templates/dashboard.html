@@ -16,6 +16,23 @@
   </script>
 </head>
 <body>
+  <div class="wiz-overlay" id="wiz">
+    <div class="wiz">
+      <div class="wiz-head">
+        <img src="{{ url_for('static', filename='logo.svg') }}" alt="">
+        <div class="t">Tun<span>aar</span> setup</div>
+        <div class="wiz-steps" id="wiz-dots"></div>
+      </div>
+      <div class="wiz-body" id="wiz-body"></div>
+      <div class="wiz-foot">
+        <button class="btn-ghost" id="wiz-skip" type="button">Skip</button>
+        <span class="spacer"></span>
+        <span class="wiz-count" id="wiz-count"></span>
+        <button class="btn-ghost" id="wiz-back" type="button">Back</button>
+        <button class="btn" id="wiz-next" type="button">Next</button>
+      </div>
+    </div>
+  </div>
   <header>
     <img src="{{ url_for('static', filename='logo.svg') }}" alt="{{ name }} logo">
     <div>
@@ -25,6 +42,7 @@
     <nav class="nav">
       <a href="/" class="active">Dashboard</a>
       <a href="/console">Console</a>
+      <a href="#" id="wiz-open">Setup wizard</a>
       <a href="/docs/user-guide.html" target="_blank" rel="noopener">Guide ↗</a>
     </nav>
     <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">
@@ -368,6 +386,148 @@
       });
       afterChange();
     });
+
+    // ===== Setup wizard =====
+    const wizSteps = ['welcome', 'sources', 'guide', 'groups', 'plex'];
+    let wizI = 0;
+
+    function openWiz(i) { wizI = i || 0; $('wiz').classList.add('open'); renderWiz(); }
+    function closeWiz() { $('wiz').classList.remove('open'); }
+
+    async function markSetupDone() {
+      try {
+        await fetch('/api/setup/complete', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ complete: true })
+        });
+      } catch (e) { /* non-fatal */ }
+    }
+
+    async function wizCount() {
+      try {
+        const s = await (await fetch('/api/status')).json();
+        const n = s.channels || 0, big = n > 600;
+        $('wiz-count').className = 'wiz-count' + (big ? ' warn' : '');
+        $('wiz-count').innerHTML = `<b>${n}</b> channels` + (big ? ' — trim below ~400 for Plex' : '');
+      } catch (e) { $('wiz-count').textContent = ''; }
+    }
+
+    async function renderWiz() {
+      const step = wizSteps[wizI];
+      $('wiz-dots').innerHTML = wizSteps.map((_, i) => `<span class="wiz-dot ${i === wizI ? 'on' : ''}"></span>`).join('');
+      $('wiz-back').style.visibility = wizI === 0 ? 'hidden' : 'visible';
+      $('wiz-next').textContent = wizI === wizSteps.length - 1 ? 'Finish' : 'Next';
+      $('wiz-count').textContent = '';
+      const body = $('wiz-body');
+
+      if (step === 'welcome') {
+        body.innerHTML = `<h4>Welcome 👋</h4>
+          <p class="lead">This quick wizard gets you from zero to watching in four steps:
+          add channels, set up the guide, trim the lineup, and connect Plex. You can re-run it
+          anytime from the <b>Setup wizard</b> link.</p>
+          <ul><li>① Add channels (free presets, an M3U list, or a real HDHomeRun)</li>
+          <li>② Guide / EPG</li><li>③ Trim groups (keeps Plex happy)</li>
+          <li>④ Connect to Plex</li></ul>`;
+      }
+
+      else if (step === 'sources') {
+        let presets = [];
+        try { presets = await (await fetch('/api/presets')).json(); } catch (e) {}
+        body.innerHTML = `<h4>① Add channels</h4>
+          <p class="lead">Click any free providers you want (their guide is detected automatically),
+          and/or add your own M3U list or a real HDHomeRun.</p>
+          <div class="wiz-preset" id="wiz-presets">${presets.map(p =>
+            `<button class="btn-ghost" type="button" data-id="${esc(p.id)}" ${p.added ? 'disabled' : ''}>${p.added ? '✓ ' : '+ '}${esc(p.label)}</button>`).join('')}</div>
+          <div class="form-row">
+            <select id="wiz-type" class="inp" style="flex:0 0 140px"><option value="m3u">M3U playlist</option><option value="hdhr">HDHomeRun</option></select>
+            <input id="wiz-url" class="inp" placeholder="https://provider/playlist.m3u  (or http://hdhomerun-ip)" style="flex:1">
+            <button class="btn" id="wiz-add" type="button">Add</button>
+          </div>`;
+        body.querySelectorAll('#wiz-presets button[data-id]').forEach(b => b.addEventListener('click', async () => {
+          b.disabled = true;
+          await fetch('/api/sources', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ preset: b.dataset.id }) });
+          renderWiz(); afterChange();
+        }));
+        $('wiz-add').addEventListener('click', async () => {
+          const url = $('wiz-url').value.trim(); if (!url) return;
+          await fetch('/api/sources', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, type: $('wiz-type').value }) });
+          $('wiz-url').value = ''; renderWiz(); afterChange();
+        });
+        wizCount();
+      }
+
+      else if (step === 'guide') {
+        let cfg = {}; try { cfg = await (await fetch('/api/config')).json(); } catch (e) {}
+        body.innerHTML = `<h4>② Guide / EPG</h4>
+          <p class="lead">Leave auto-detect on — preset guides load automatically. Only add an extra
+          XMLTV URL if you have an IPTV list or HDHomeRun that needs its own guide (one per line).</p>
+          <label class="switch" style="margin-bottom:10px"><input type="checkbox" id="wiz-auto" ${cfg.epg_auto !== false ? 'checked' : ''}> Auto-detect guide from playlists</label>
+          <textarea id="wiz-epg" class="inp" rows="3" placeholder="https://example.com/epg.xml.gz">${(cfg.epg_urls || []).join('\n')}</textarea>
+          <p class="hint">Tip: don't paste guesses — a 404 just means that file doesn't exist. Presets need nothing here.</p>`;
+      }
+
+      else if (step === 'groups') {
+        let cfg = {}; try { cfg = await (await fetch('/api/config')).json(); } catch (e) {}
+        const exc = new Set(cfg.groups_exclude || []);
+        body.innerHTML = `<h4>③ Trim groups</h4>
+          <p class="lead">Untick categories you don't watch. A big lineup makes Plex fail to save —
+          aim for a few hundred channels.</p>
+          <div class="form-row" style="margin-top:0">
+            <button class="btn-ghost" id="wiz-g-all" type="button">Select all</button>
+            <button class="btn-ghost" id="wiz-g-none" type="button">Deselect all</button>
+          </div>
+          <div class="group-grid" id="wiz-groups" style="margin-top:8px">${(cfg.all_groups || []).map(g =>
+            `<label class="grp"><input type="checkbox" value="${esc(g)}" ${exc.has(g) ? '' : 'checked'}> ${esc(g)}</label>`).join('') || '<span class="hint">No groups yet — add a source first.</span>'}</div>`;
+        $('wiz-g-all').addEventListener('click', () => body.querySelectorAll('#wiz-groups input').forEach(i => i.checked = true));
+        $('wiz-g-none').addEventListener('click', () => body.querySelectorAll('#wiz-groups input').forEach(i => i.checked = false));
+        wizCount();
+      }
+
+      else if (step === 'plex') {
+        const origin = location.origin;
+        body.innerHTML = `<h4>④ Connect to Plex</h4>
+          <p class="lead">In Plex: <b>Settings → Live TV &amp; DVR → Set up Plex DVR</b>. Tunaar should
+          appear automatically; if not, add it by address. Then choose <b>"Use an XMLTV guide"</b>.</p>
+          <div class="wiz-copy"><code id="wiz-dev">${esc(origin)}</code><button class="btn-ghost" data-copy="wiz-dev" type="button">Copy</button></div>
+          <div class="wiz-copy"><code id="wiz-xmltv">${esc(origin)}/epg.xml</code><button class="btn-ghost" data-copy="wiz-xmltv" type="button">Copy</button></div>
+          <p class="hint">Use a single Tunaar DVR with the XMLTV guide — don't run a second DVR on Plex's own guide.</p>`;
+        body.querySelectorAll('button[data-copy]').forEach(b => b.addEventListener('click', () => {
+          navigator.clipboard && navigator.clipboard.writeText($(b.dataset.copy).textContent);
+          b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy', 1200);
+        }));
+      }
+    }
+
+    async function wizSave() {
+      const step = wizSteps[wizI];
+      if (step === 'guide') {
+        const urls = ($('wiz-epg').value || '').split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+        await fetch('/api/epg', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ epg_urls: urls, epg_auto: $('wiz-auto').checked }) });
+      } else if (step === 'groups') {
+        const list = $('wiz-groups');
+        if (list) {
+          const exclude = [...list.querySelectorAll('input:not(:checked)')].map(i => i.value);
+          await fetch('/api/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ include: [], exclude }) });
+        }
+      }
+    }
+
+    $('wiz-next').addEventListener('click', async () => {
+      await wizSave();
+      if (wizI < wizSteps.length - 1) { wizI++; renderWiz(); afterChange(); }
+      else { await markSetupDone(); closeWiz(); loadConfig(); afterChange(); }
+    });
+    $('wiz-back').addEventListener('click', () => { if (wizI > 0) { wizI--; renderWiz(); } });
+    $('wiz-skip').addEventListener('click', async () => { await markSetupDone(); closeWiz(); });
+    $('wiz-open').addEventListener('click', (e) => { e.preventDefault(); openWiz(0); });
+
+    // Auto-open on a clean/first-run setup.
+    (async () => {
+      try {
+        const cfg = await (await fetch('/api/config')).json();
+        if (!cfg.setup_complete) openWiz(0);
+      } catch (e) { /* ignore */ }
+    })();
 
     refreshStatus(); loadChannels();
     setInterval(refreshStatus, 4000);

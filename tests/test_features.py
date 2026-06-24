@@ -131,6 +131,18 @@ def test_epg_map_requires_name(client):
     assert client.post("/api/epg/map", json={"tvg_id": "x"}).status_code == 400
 
 
+def test_setup_complete_flag(client, app):
+    # Fresh config defaults to not-complete so the wizard auto-opens.
+    assert client.get("/api/config").get_json()["setup_complete"] is False
+    r = client.post("/api/setup/complete", json={"complete": True})
+    assert r.status_code == 200
+    assert client.get("/api/config").get_json()["setup_complete"] is True
+    assert app.config["TUNAAR"].setup_complete is True
+    # Can be reset (e.g. to re-run the wizard).
+    client.post("/api/setup/complete", json={"complete": False})
+    assert client.get("/api/config").get_json()["setup_complete"] is False
+
+
 def test_group_include_filter(client, app):
     resp = client.post("/api/groups", json={"include": ["News"]})
     assert resp.status_code == 200

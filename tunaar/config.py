@@ -41,6 +41,7 @@ DEFAULTS: dict = {
     "ffmpeg_path": "ffmpeg",
     "discovery": True,  # answer HDHomeRun discovery so Plex auto-finds the tuner
     "discovery_port": 65001,
+    "setup_complete": False,  # first-run wizard shown until dismissed/finished
 }
 
 # Managed as structured lists via the dashboard, not via env vars.
@@ -101,6 +102,7 @@ class Config:
     ffmpeg_path: str = DEFAULTS["ffmpeg_path"]
     discovery: bool = DEFAULTS["discovery"]
     discovery_port: int = DEFAULTS["discovery_port"]
+    setup_complete: bool = DEFAULTS["setup_complete"]
 
     path: str = field(default="config.json", repr=False, compare=False)
 
