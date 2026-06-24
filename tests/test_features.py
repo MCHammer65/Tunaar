@@ -278,6 +278,19 @@ def test_license_nag_default_blocks_nothing(tmp_path, monkeypatch):
     assert client.post("/api/test/all").status_code == 200
 
 
+def test_buy_url_exposed_in_status(tmp_path, monkeypatch):
+    monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: PLAYLIST)
+    cfg = Config(
+        device_id="BUY1",
+        sources=[{"name": "M", "url": "http://x/l.m3u"}],
+        buy_url="https://store.example.com/checkout",
+        stream_mode="redirect",
+        path=str(tmp_path / "config.json"),
+    )
+    client = create_app(cfg).test_client()
+    assert client.get("/api/status").get_json()["license"]["buy_url"] == "https://store.example.com/checkout"
+
+
 def test_license_premium_mode_gates_extras(tmp_path, monkeypatch):
     monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: PLAYLIST)
     cfg = Config(

@@ -52,7 +52,31 @@ def test_licensed_overrides_expired_trial(monkeypatch):
     lifetime = _make_key(priv, email="a@b.com", plan="lifetime", exp=0)
     r = lic.evaluate(lifetime, now - 999 * lic.DAY, now=now)
     assert r["state"] == "licensed" and r["days_left"] is None  # never expires
-    # Expired annual key falls back to (also expired) trial.
-    annual = _make_key(priv, email="a@b.com", plan="annual", exp=int(now - lic.DAY))
+    # Annual key well past grace falls back to (also expired) trial.
+    annual = _make_key(priv, email="a@b.com", plan="annual",
+                       exp=int(now - (lic.GRACE_DAYS + 1) * lic.DAY))
     r2 = lic.evaluate(annual, now - 999 * lic.DAY, now=now)
     assert r2["state"] == "expired"
+
+
+def test_annual_grace_period(monkeypatch):
+    priv, pub = _keypair()
+    monkeypatch.setattr(lic, "PUBLIC_KEY_HEX", pub)
+    now = 3_000_000.0
+    old_trial = now - 999 * lic.DAY  # trial long expired, so grace is what counts
+    # Expired 2 days ago → still within the grace window → premium kept.
+    key = _make_key(priv, email="a@b.com", plan="annual", exp=int(now - 2 * lic.DAY))
+    r = lic.evaluate(key, old_trial, now=now)
+    assert r["state"] == "grace" and r["premium"] is True
+    assert r["days_left"] == lic.GRACE_DAYS - 2
+    # Past the grace window → expired.
+    old = _make_key(priv, email="a@b.com", plan="annual",
+                    exp=int(now - (lic.GRACE_DAYS + 1) * lic.DAY))
+    assert lic.evaluate(old, old_trial, now=now)["state"] == "expired"
+
+
+def test_make_key_roundtrips(monkeypatch):
+    seed, pub = _keypair()
+    monkeypatch.setattr(lic, "PUBLIC_KEY_HEX", pub)
+    key = lic.make_key(seed.hex(), "a@b.com", plan="lifetime")
+    assert lic.verify_key(key)["plan"] == "lifetime"

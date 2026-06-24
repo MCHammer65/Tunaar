@@ -589,6 +589,7 @@ def create_app(config: Config | None = None) -> Flask:
     def _license() -> dict:
         state = licensing.evaluate(config.license_key, config.trial_start)
         state["enforce"] = config.license_enforce
+        state["buy_url"] = config.buy_url
         return state
 
     def _require_premium():

@@ -146,6 +146,7 @@
         <div class="form-row" style="margin-top:0">
           <input id="lic-key" class="inp" placeholder="Paste your license key" style="flex:1">
           <button id="lic-save" class="btn" type="button">Activate</button>
+          <a id="lic-buy" class="btn" href="#" target="_blank" rel="noopener" style="display:none;text-decoration:none">Buy a license</a>
         </div>
         <p class="hint">30-day free trial — no key needed. A license supports ongoing development;
           your channels always keep streaming.</p>
@@ -329,10 +330,21 @@
       if (!lic) return;
       const b = $('lic-banner');
       const ls = $('lic-status');
+      // Buy button — shown whenever a checkout URL is configured.
+      const buy = $('lic-buy');
+      if (buy) {
+        if (lic.buy_url) { buy.href = lic.buy_url; buy.style.display = ''; }
+        else { buy.style.display = 'none'; }
+      }
       if (lic.state === 'licensed') {
         b.style.display = 'none';
         if (ls) ls.innerHTML = `✓ Licensed (${esc(lic.plan)})` + (lic.email ? ` — ${esc(lic.email)}` : '') +
           (lic.days_left != null ? ` · ${lic.days_left} days left` : ' · lifetime');
+      } else if (lic.state === 'grace') {
+        b.style.display = 'block';
+        b.style.borderColor = 'var(--warn)'; b.style.color = 'var(--text)';
+        b.innerHTML = `Your license expired — you're in a <b>${lic.days_left}-day grace period</b>. Renew to stay licensed.`;
+        if (ls) ls.textContent = `Licensed (grace) — ${lic.days_left} days to renew.`;
       } else if (lic.state === 'trial') {
         b.style.display = lic.days_left <= 7 ? 'block' : 'none';
         b.style.borderColor = 'var(--warn)'; b.style.color = 'var(--text)';
