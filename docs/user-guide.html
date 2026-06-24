@@ -119,6 +119,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
     <a href="#plex">Add to Plex</a>
     <a href="#streaming">Stream modes</a>
     <a href="#updating">Updating</a>
+    <a href="#license">Licensing</a>
     <a href="#trouble">Troubleshooting</a>
     <a href="#faq">FAQ</a>
   </aside>
@@ -250,6 +251,22 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
 ./tunaar.sh update        <span style="color:#6b7686"># pull latest, recreate, keep your config</span></code></pre>
     <p>Or use the dashboard's <b>Console → Update</b> button if you mounted the Docker socket. See the
        <a href="install.html#updates">Install Guide</a> for both options.</p>
+
+    <h2 id="license">Licensing</h2>
+    <p>Tunaar is free to try for <b>30 days</b> — no key, no sign-up, full features from first run.
+       After the trial <b>everything keeps working</b>; you'll just see a gentle banner inviting you to
+       buy a license to support development.</p>
+    <ul>
+      <li><b>Trial:</b> starts automatically on first launch and is stored with your config, so it survives restarts and updates.</li>
+      <li><b>Pricing:</b> a low annual fee, or a one-off lifetime license. (Checkout link coming soon — it'll appear in the License panel.)</li>
+      <li><b>Private &amp; offline:</b> license keys are verified on-device with cryptography — Tunaar never phones home, so activation works even on locked-down networks.</li>
+    </ul>
+    <h3>Activating a key</h3>
+    <ol class="steps">
+      <li><h3>Open the License panel</h3><p>Dashboard → <b>Settings → License</b>. It shows your current status (trial days left, or active license).</p></li>
+      <li><h3>Paste your key</h3><p>Enter the key from your purchase email and click <span class="tag">Activate</span>. The badge switches to <b>Licensed</b> — that's it.</p></li>
+    </ol>
+    <div class="note">A license is tied to you, not a machine — use it on as many of your own Tunaar installs as you like. Annual keys simply expire on their date; lifetime keys never do.</div>
 
     <h2 id="trouble">Troubleshooting</h2>
     <table>
