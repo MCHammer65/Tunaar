@@ -12,6 +12,7 @@ import json
 import os
 import re
 import tempfile
+import time
 import uuid
 from dataclasses import asdict, dataclass, field, fields
 
@@ -42,6 +43,8 @@ DEFAULTS: dict = {
     "discovery": True,  # answer HDHomeRun discovery so Plex auto-finds the tuner
     "discovery_port": 65001,
     "setup_complete": False,  # first-run wizard shown until dismissed/finished
+    "license_key": "",  # Ed25519-signed license token (empty = trial/unlicensed)
+    "trial_start": 0.0,  # unix timestamp of first run; seeds the 30-day trial
 }
 
 # Managed as structured lists via the dashboard, not via env vars.
@@ -103,6 +106,8 @@ class Config:
     discovery: bool = DEFAULTS["discovery"]
     discovery_port: int = DEFAULTS["discovery_port"]
     setup_complete: bool = DEFAULTS["setup_complete"]
+    license_key: str = DEFAULTS["license_key"]
+    trial_start: float = DEFAULTS["trial_start"]
 
     path: str = field(default="config.json", repr=False, compare=False)
 
@@ -126,13 +131,20 @@ class Config:
         cfg.normalize()
         cfg.validate()
 
-        # Persist a generated device id so Plex sees a stable tuner identity.
+        # Persist a generated device id (stable tuner identity) and the trial
+        # start (seeds the 30-day free trial) on first run.
+        dirty = False
         if not cfg.device_id:
             cfg.device_id = uuid.uuid4().hex[:8].upper()
+            dirty = True
+        if not cfg.trial_start:
+            cfg.trial_start = time.time()
+            dirty = True
+        if dirty:
             try:
                 cfg.save()
             except OSError:
-                pass  # read-only config dir is fine; id stays for this run
+                pass  # read-only config dir is fine; values hold for this run
         return cfg
 
     def normalize(self) -> None:

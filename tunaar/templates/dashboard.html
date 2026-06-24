@@ -52,6 +52,7 @@
 
   <main>
     <div id="banner" class="banner"></div>
+    <div id="lic-banner" class="banner" style="display:none"></div>
 
     <div class="cards">
       <div class="card">
@@ -139,6 +140,18 @@
         <div id="map-list" style="margin-top:10px;max-height:320px;overflow:auto"></div>
       </div>
 
+      <div class="panel" style="grid-column:1/-1">
+        <h3>License</h3>
+        <p class="hint" id="lic-status">—</p>
+        <div class="form-row" style="margin-top:0">
+          <input id="lic-key" class="inp" placeholder="Paste your license key" style="flex:1">
+          <button id="lic-save" class="btn" type="button">Activate</button>
+        </div>
+        <p class="hint">30-day free trial — no key needed. After that, premium conveniences
+          (one-click presets, HDHomeRun ingest, manual mapping, health check) need a license;
+          your channels keep streaming either way.</p>
+      </div>
+
     </div>
 
     <div class="section-title">Plex endpoints</div>
@@ -205,6 +218,8 @@
         if (s.epg.error) errs.push('EPG: ' + s.epg.error);
         if (errs.length) { banner.style.display = 'block'; banner.textContent = errs.join('  •  '); }
         else banner.style.display = 'none';
+
+        renderLicense(s.license);
 
         const active = $('active');
         if (!s.tuners.active.length) {
@@ -309,6 +324,40 @@
     }
 
     function afterChange() { refreshStatus(); loadChannels(); }
+
+    // ---- License ----
+    function renderLicense(lic) {
+      if (!lic) return;
+      const b = $('lic-banner');
+      const ls = $('lic-status');
+      if (lic.state === 'licensed') {
+        b.style.display = 'none';
+        if (ls) ls.innerHTML = `✓ Licensed (${esc(lic.plan)})` + (lic.email ? ` — ${esc(lic.email)}` : '') +
+          (lic.days_left != null ? ` · ${lic.days_left} days left` : ' · lifetime');
+      } else if (lic.state === 'trial') {
+        b.style.display = lic.days_left <= 7 ? 'block' : 'none';
+        b.style.borderColor = 'var(--warn)'; b.style.color = 'var(--text)';
+        b.innerHTML = `Free trial — <b>${lic.days_left} days left</b>. Add a license to keep premium features.`;
+        if (ls) ls.textContent = `Free trial — ${lic.days_left} days left.`;
+      } else {
+        b.style.display = 'block';
+        b.style.borderColor = ''; b.style.color = '';
+        b.innerHTML = 'Your Tunaar trial has ended — channels keep streaming, but premium features are locked. Add a license below.';
+        if (ls) ls.textContent = 'Trial ended — premium features locked.';
+      }
+    }
+
+    document.addEventListener('click', async (e) => {
+      if (e.target && e.target.id === 'lic-save') {
+        const key = $('lic-key').value.trim();
+        const r = await (await fetch('/api/license', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key })
+        })).json();
+        if (r.error) { $('lic-status').textContent = '✕ ' + (r.message || 'Invalid key'); }
+        else { $('lic-key').value = ''; refreshStatus(); }
+      }
+    });
 
     // ---- Manual EPG mapping ----
     let guideById = {};      // tvg_id -> display name

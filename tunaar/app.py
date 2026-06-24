@@ -29,7 +29,7 @@ from flask import (
     stream_with_context,
 )
 
-from . import __version__, epg, m3u, presets, proxy
+from . import __version__, epg, license as licensing, m3u, presets, proxy
 from .config import Config
 from .logbus import BusHandler, LogBus
 
@@ -454,6 +454,9 @@ def create_app(config: Config | None = None) -> Flask:
     @app.post("/api/test/all")
     def api_test_all() -> Response:
         """Probe up to ``limit`` channels concurrently and report dead streams."""
+        gate = _require_premium()
+        if gate:
+            return gate
         from concurrent.futures import ThreadPoolExecutor
 
         limit = min(max(request.args.get("limit", default=100, type=int), 1), 300)
@@ -550,6 +553,7 @@ def create_app(config: Config | None = None) -> Flask:
                     "in_use": tuners.in_use,
                     "active": tuners.active(),
                 },
+                "license": _license(),
             }
         )
 
@@ -581,6 +585,32 @@ def create_app(config: Config | None = None) -> Flask:
         except OSError:
             pass  # read-only config dir: changes still apply for this run
         _refresh()
+
+    def _license() -> dict:
+        return licensing.evaluate(config.license_key, config.trial_start)
+
+    def _require_premium():
+        """Gate premium features. Gentle: core streaming/config stays free."""
+        if not _license()["premium"]:
+            return jsonify({
+                "error": "premium_required",
+                "message": "Your Tunaar trial has ended — a license unlocks this feature.",
+            }), 402
+        return None
+
+    @app.get("/api/license")
+    def api_license() -> Response:
+        return jsonify(_license())
+
+    @app.post("/api/license")
+    def api_set_license() -> Response:
+        body = request.get_json(silent=True) or {}
+        key = (body.get("key") or "").strip()
+        if key and licensing.verify_key(key) is None:
+            return jsonify({"error": "invalid", "message": "That license key isn't valid."}), 400
+        config.license_key = key
+        _save_and_refresh()
+        return jsonify({"ok": True, **_license()})
 
     @app.get("/api/config")
     def api_config() -> Response:
@@ -616,6 +646,9 @@ def create_app(config: Config | None = None) -> Flask:
 
     @app.post("/api/epg/preset")
     def api_add_epg_preset() -> Response:
+        gate = _require_premium()
+        if gate:
+            return gate
         body = request.get_json(silent=True) or {}
         preset = presets.epg_get((body.get("id") or "").strip())
         if not preset:
@@ -632,6 +665,9 @@ def create_app(config: Config | None = None) -> Flask:
 
     @app.post("/api/epg/map")
     def api_epg_map() -> Response:
+        gate = _require_premium()
+        if gate:
+            return gate
         body = request.get_json(silent=True) or {}
         name = (body.get("name") or "").strip()
         if not name:
@@ -664,6 +700,13 @@ def create_app(config: Config | None = None) -> Flask:
     @app.post("/api/sources")
     def api_add_source() -> Response:
         body = request.get_json(silent=True) or {}
+
+        # Premium conveniences: one-click presets and real-HDHomeRun ingest.
+        # Plain M3U sources stay free even after the trial.
+        if body.get("preset") or (body.get("type") or "").lower() == "hdhr":
+            gate = _require_premium()
+            if gate:
+                return gate
 
         # One-click preset: look up a curated source by id.
         preset_id = (body.get("preset") or "").strip()
