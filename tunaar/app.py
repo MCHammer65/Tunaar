@@ -451,6 +451,32 @@ def create_app(config: Config | None = None) -> Flask:
         )
         return jsonify(result)
 
+    @app.post("/api/test/all")
+    def api_test_all() -> Response:
+        """Probe up to ``limit`` channels concurrently and report dead streams."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        limit = min(max(request.args.get("limit", default=100, type=int), 1), 300)
+        chans = channels.get()
+        sample = chans[:limit]
+        ua = config.user_agent
+
+        def _probe(ch):
+            r = proxy.probe(ch.url, user_agent=ua, timeout=8)
+            return {"number": ch.number, "name": ch.name, "ok": bool(r.get("ok")),
+                    "error": r.get("error") or (None if r.get("ok") else f"status {r.get('status')}")}
+
+        with ThreadPoolExecutor(max_workers=12) as ex:
+            results = list(ex.map(_probe, sample))
+        failed = [r for r in results if not r["ok"]]
+        log.info("Bulk test: %d tested, %d dead", len(results), len(failed))
+        return jsonify({
+            "tested": len(results),
+            "ok": len(results) - len(failed),
+            "total_channels": len(chans),
+            "failed": failed,
+        })
+
     @app.get("/api/update/check")
     def api_update_check() -> Response:
         from . import selfupdate
