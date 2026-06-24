@@ -568,8 +568,16 @@ def create_app(config: Config | None = None) -> Flask:
                 "groups_exclude": config.groups_exclude,
                 "all_groups": channels.all_groups,
                 "epg_overrides": config.epg_overrides,
+                "setup_complete": config.setup_complete,
             }
         )
+
+    @app.post("/api/setup/complete")
+    def api_setup_complete() -> Response:
+        body = request.get_json(silent=True) or {}
+        config.setup_complete = bool(body.get("complete", True))
+        _save_and_refresh()
+        return jsonify({"ok": True, "setup_complete": config.setup_complete})
 
     @app.get("/api/epg/guide-channels")
     def api_guide_channels() -> Response:

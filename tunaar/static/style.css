@@ -159,6 +159,36 @@ textarea.inp { resize: vertical; }
 .nav a.active { color: var(--text); border-color: var(--line); background: var(--panel-2); }
 header .theme-toggle { margin-left: 10px; }
 
+/* ---- Setup wizard ---- */
+.wiz-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
+  display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px;
+}
+.wiz-overlay.open { display: flex; }
+.wiz {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0,0,0,.4);
+}
+.wiz-head { display: flex; align-items: center; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+.wiz-head img { width: 30px; height: 30px; }
+.wiz-head .t { font-weight: 700; font-size: 17px; }
+.wiz-head .t span { background: linear-gradient(90deg,var(--accent),var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.wiz-steps { margin-left: auto; display: flex; gap: 6px; }
+.wiz-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.wiz-dot.on { background: var(--accent); }
+.wiz-body { padding: 20px 22px; overflow: auto; }
+.wiz-body h4 { margin: 0 0 6px; font-size: 16px; }
+.wiz-body .lead { color: var(--muted); font-size: 13.5px; margin: 0 0 14px; }
+.wiz-foot { display: flex; align-items: center; gap: 10px; padding: 16px 22px; border-top: 1px solid var(--line); }
+.wiz-foot .spacer { flex: 1; }
+.wiz-count { font-size: 13px; color: var(--muted); }
+.wiz-count b { color: var(--text); }
+.wiz-count.warn b { color: var(--err); }
+.wiz-preset { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.wiz-copy { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.wiz-copy code { flex: 1; background: var(--panel-2); padding: 8px 10px; border-radius: 8px; font-size: 12.5px; overflow: auto; }
+
 /* ---- Console log viewer ---- */
 .log-controls { display: flex; align-items: center; gap: 14px; }
 .log {
