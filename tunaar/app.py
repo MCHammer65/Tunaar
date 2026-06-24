@@ -642,16 +642,31 @@ def create_app(config: Config | None = None) -> Flask:
         if not url:
             return jsonify({"error": "url is required"}), 400
         stype = (body.get("type") or "m3u").lower()
-        config.sources.append(
-            {
-                "name": (body.get("name") or "").strip(),
-                "url": url,
-                "group": (body.get("group") or "").strip(),
-                "type": "hdhr" if stype == "hdhr" else "m3u",
-            }
-        )
+        try:
+            limit = max(0, int(body.get("limit") or 0))
+        except (TypeError, ValueError):
+            limit = 0
+        source = {
+            "name": (body.get("name") or "").strip(),
+            "url": url,
+            "group": (body.get("group") or "").strip(),
+            "type": "hdhr" if stype == "hdhr" else "m3u",
+        }
+        if limit:
+            source["limit"] = limit
+        config.sources.append(source)
+
+        # Auto-derive the provider's XMLTV guide for Xtream-style playlists.
+        derived = None
+        if source["type"] == "m3u":
+            derived = m3u.derive_epg_url(url)
+            if derived and derived not in config.epg_urls:
+                config.epg_urls.append(derived)
+
         _save_and_refresh()
-        return jsonify({"ok": True, "sources": config.sources})
+        return jsonify(
+            {"ok": True, "sources": config.sources, "derived_epg": derived}
+        )
 
     @app.delete("/api/sources/<int:index>")
     def api_remove_source(index: int) -> Response:

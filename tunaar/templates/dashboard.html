@@ -96,8 +96,10 @@
           <input id="src-name" class="inp" placeholder="Name (optional)" style="flex:0 0 130px">
           <input id="src-url" class="inp" placeholder="https://provider/playlist.m3u  (or http://hdhomerun-ip)" style="flex:1">
           <input id="src-group" class="inp" placeholder="Force group (optional)" style="flex:0 0 150px">
+          <input id="src-limit" class="inp" type="number" min="0" placeholder="Max ch." style="flex:0 0 90px" title="Cap channels from this source (0 = no limit)">
           <button id="src-add" class="btn" type="button">Add</button>
         </div>
+        <p class="hint" id="src-msg" style="display:none"></p>
       </div>
 
       <div class="panel">
@@ -264,6 +266,7 @@
         ? cfg.sources.map((s, i) =>
             `<span class="chip">${s.type === 'hdhr' ? '📡 ' : ''}${esc(s.name || s.url)}` +
             `${s.group ? ` <em>→ ${esc(s.group)}</em>` : ''}` +
+            `${s.limit ? ` <em>≤${s.limit}</em>` : ''}` +
             ` <a data-i="${i}" class="x" title="Remove">✕</a></span>`).join('')
         : '<span class="hint">No sources yet.</span>';
       sl.querySelectorAll('a.x').forEach(a => a.addEventListener('click', async () => {
@@ -353,11 +356,17 @@
     $('src-add').addEventListener('click', async () => {
       const url = $('src-url').value.trim();
       if (!url) return;
-      await fetch('/api/sources', {
+      const limit = parseInt($('src-limit').value, 10) || 0;
+      const r = await (await fetch('/api/sources', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: $('src-name').value.trim(), url, group: $('src-group').value.trim(), type: $('src-type').value })
-      });
-      $('src-name').value = $('src-url').value = $('src-group').value = '';
+        body: JSON.stringify({ name: $('src-name').value.trim(), url, group: $('src-group').value.trim(), type: $('src-type').value, limit })
+      })).json();
+      $('src-name').value = $('src-url').value = $('src-group').value = $('src-limit').value = '';
+      const msg = $('src-msg');
+      if (r && r.derived_epg) {
+        msg.style.display = 'block';
+        msg.innerHTML = '✓ Auto-added the provider guide: <code>' + esc(r.derived_epg) + '</code>';
+      } else { msg.style.display = 'none'; }
       loadConfig(); loadPresets(); afterChange();
     });
 
