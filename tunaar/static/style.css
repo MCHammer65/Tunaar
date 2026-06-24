@@ -125,6 +125,16 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 30px
 .section-head { display: flex; align-items: center; justify-content: space-between; margin: 22px 0 10px; }
 .btn-ghost { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 5px 12px; font-size: 12px; cursor: pointer; }
 .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+/* Clear "selected/added" state for preset chips (sources, EPG, wizard). */
+.btn-ghost.added {
+  border-color: var(--ok);
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  font-weight: 600;
+  cursor: default;
+}
+.btn-ghost.added:hover { border-color: var(--ok); color: var(--ok); }
+.btn-ghost.busy { opacity: .6; cursor: progress; }
 
 .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 8px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
