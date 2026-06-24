@@ -14,19 +14,11 @@ Usage:
 """
 
 import argparse
-import base64
-import binascii
-import json
 import os
 import sys
-import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tunaar import _ed25519  # noqa: E402
-
-
-def _b64url(b: bytes) -> str:
-    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+from tunaar import _ed25519, license as lic  # noqa: E402
 
 
 def gen() -> None:
@@ -36,12 +28,7 @@ def gen() -> None:
 
 
 def sign(args) -> None:
-    seed = binascii.unhexlify(args.priv)
-    exp = 0 if args.plan == "lifetime" else int(time.time()) + args.days * 86400
-    payload = {"email": args.email, "plan": args.plan, "exp": exp}
-    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
-    sig = _ed25519.sign(raw, seed)
-    print(f"{_b64url(raw)}.{_b64url(sig)}")
+    print(lic.make_key(args.priv, args.email, plan=args.plan, days=args.days))
 
 
 def main() -> None:

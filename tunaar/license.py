@@ -49,6 +49,31 @@ def _b64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + pad)
 
 
+def _b64url_encode(b: bytes) -> str:
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+
+def make_key(
+    private_key_hex: str,
+    email: str,
+    plan: str = "annual",
+    days: int = 365,
+    now: float | None = None,
+) -> str:
+    """Sign and return a license key (owner-side; needs the private key).
+
+    ``plan`` is ``"annual"`` (expires after ``days``) or ``"lifetime"`` (never).
+    The output is verifiable by :func:`verify_key` with the matching public key.
+    """
+    seed = binascii.unhexlify(private_key_hex)
+    now = time.time() if now is None else now
+    exp = 0 if plan == "lifetime" else int(now) + days * DAY
+    payload = {"email": email, "plan": plan, "exp": exp}
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    sig = _ed25519.sign(raw, seed)
+    return f"{_b64url_encode(raw)}.{_b64url_encode(sig)}"
+
+
 def verify_key(key: str, public_key_hex: str | None = None) -> dict | None:
     """Return the payload dict if ``key`` is validly signed, else ``None``."""
     pub_hex = public_key_hex if public_key_hex is not None else _public_key_hex()
