@@ -212,17 +212,19 @@ def test_presets_listed_with_added_flag(client):
     assert {"GB", "US", "CA", "FR", "JM"} <= {p["region"] for p in presets}
 
 
-def test_add_preset_creates_source_and_marks_added(client):
+def test_add_preset_toggles_source(client):
     r = client.post("/api/sources", json={"preset": "samsung-gb"})
+    assert r.get_json()["added"] is True
     sources = r.get_json()["sources"]
     assert sources[-1]["url"] == "https://i.mjh.nz/SamsungTVPlus/gb.m3u8"
     assert sources[-1]["group"] == "Samsung TV Plus"
-    # Now the preset is reported as added and re-adding is idempotent.
     presets = {p["id"]: p for p in client.get("/api/presets").get_json()}
     assert presets["samsung-gb"]["added"] is True
-    client.post("/api/sources", json={"preset": "samsung-gb"})
+    # Clicking the same preset again removes it (toggle).
+    r2 = client.post("/api/sources", json={"preset": "samsung-gb"})
+    assert r2.get_json()["added"] is False
     urls = [s["url"] for s in client.get("/api/config").get_json()["sources"]]
-    assert urls.count("https://i.mjh.nz/SamsungTVPlus/gb.m3u8") == 1
+    assert "https://i.mjh.nz/SamsungTVPlus/gb.m3u8" not in urls
 
 
 def test_add_unknown_preset_rejected(client):
@@ -248,12 +250,13 @@ def test_epg_presets_listed_and_added(client, app):
     assert "epg-uk" in ids
     assert all(p["added"] is False for p in presets)
     r = client.post("/api/epg/preset", json={"id": "epg-uk"})
-    assert r.status_code == 200
+    assert r.status_code == 200 and r.get_json()["added"] is True
     assert any("UK1" in u for u in app.config["TUNAAR"].epg_urls)
-    # Idempotent + now reported as added.
-    client.post("/api/epg/preset", json={"id": "epg-uk"})
-    assert sum("UK1" in u for u in app.config["TUNAAR"].epg_urls) == 1
-    assert {p["id"]: p["added"] for p in client.get("/api/epg-presets").get_json()}["epg-uk"] is True
+    # Clicking again toggles it back off.
+    r2 = client.post("/api/epg/preset", json={"id": "epg-uk"})
+    assert r2.get_json()["added"] is False
+    assert not any("UK1" in u for u in app.config["TUNAAR"].epg_urls)
+    assert {p["id"]: p["added"] for p in client.get("/api/epg-presets").get_json()}["epg-uk"] is False
 
 
 def test_epg_preset_unknown_rejected(client):

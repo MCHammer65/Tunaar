@@ -261,15 +261,18 @@
       let presets;
       try { presets = await (await fetch('/api/presets')).json(); } catch (e) { return; }
       pl.innerHTML = presets.map(p =>
-        `<button class="btn-ghost${p.added ? ' added' : ''}" type="button" data-id="${esc(p.id)}" data-label="${esc(p.label)}" ${p.added ? 'disabled' : ''}>` +
+        `<button class="btn-ghost${p.added ? ' added' : ''}" type="button" data-id="${esc(p.id)}" data-label="${esc(p.label)}">` +
         `${p.added ? '✓ ' : '+ '}${esc(p.label)}</button>`).join('');
       pl.querySelectorAll('button[data-id]').forEach(b => b.addEventListener('click', async () => {
-        if (b.disabled) return;
-        b.classList.add('added', 'busy'); b.textContent = '✓ ' + b.dataset.label;
+        if (b.classList.contains('busy')) return;
+        const adding = !b.classList.contains('added');
+        b.classList.toggle('added', adding); b.classList.add('busy');
+        b.textContent = (adding ? '✓ ' : '+ ') + b.dataset.label;
         await fetch('/api/sources', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ preset: b.dataset.id })
         });
+        b.classList.remove('busy');
         loadConfig(); loadPresets(); afterChange();
       }));
     }
@@ -280,14 +283,17 @@
       let list;
       try { list = await (await fetch('/api/epg-presets')).json(); } catch (e) { return; }
       el.innerHTML = list.map(p =>
-        `<button class="btn-ghost${p.added ? ' added' : ''}" type="button" data-id="${esc(p.id)}" data-label="${esc(p.label)}" ${p.added ? 'disabled' : ''}>${p.added ? '✓ ' : '+ '}${esc(p.label)}</button>`).join('');
+        `<button class="btn-ghost${p.added ? ' added' : ''}" type="button" data-id="${esc(p.id)}" data-label="${esc(p.label)}">${p.added ? '✓ ' : '+ '}${esc(p.label)}</button>`).join('');
       el.querySelectorAll('button[data-id]').forEach(b => b.addEventListener('click', async () => {
-        if (b.disabled) return;
-        b.classList.add('added', 'busy'); b.textContent = '✓ ' + b.dataset.label;
+        if (b.classList.contains('busy')) return;
+        const adding = !b.classList.contains('added');
+        b.classList.toggle('added', adding); b.classList.add('busy');
+        b.textContent = (adding ? '✓ ' : '+ ') + b.dataset.label;
         await fetch('/api/epg/preset', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: b.dataset.id })
         });
+        b.classList.remove('busy');
         loadConfig(); loadEpgPresets(); afterChange();
       }));
     }
@@ -506,6 +512,16 @@
       } catch (e) { $('wiz-count').textContent = ''; }
     }
 
+    // Rebuilding the merged playlist server-side is heavy, so don't do it on
+    // every click — debounce the count/refresh until clicks settle.
+    let _wizCountTimer = null;
+    function scheduleWizCount() {
+      $('wiz-count').className = 'wiz-count';
+      $('wiz-count').textContent = 'counting…';
+      clearTimeout(_wizCountTimer);
+      _wizCountTimer = setTimeout(() => { wizCount(); afterChange(); }, 800);
+    }
+
     async function renderWiz() {
       const step = wizSteps[wizI];
       $('wiz-dots').innerHTML = wizSteps.map((_, i) => `<span class="wiz-dot ${i === wizI ? 'on' : ''}"></span>`).join('');
@@ -530,25 +546,25 @@
         body.innerHTML = `<h4>① Add channels</h4>
           <p class="lead">Click any free providers you want (their guide is detected automatically),
           and/or add your own M3U list or a real HDHomeRun.</p>
+          <p class="lead" style="margin-top:-6px;font-size:12.5px">Click to add (green ✓). Click a green one again to remove it.</p>
           <div class="wiz-preset" id="wiz-presets">${presets.map(p =>
-            `<button class="btn-ghost${p.added ? ' added' : ''}" type="button" data-id="${esc(p.id)}" data-label="${esc(p.label)}" ${p.added ? 'disabled' : ''}>${p.added ? '✓ ' : '+ '}${esc(p.label)}</button>`).join('')}</div>
+            `<button class="btn-ghost${p.added ? ' added' : ''}" type="button" data-id="${esc(p.id)}" data-label="${esc(p.label)}">${p.added ? '✓ ' : '+ '}${esc(p.label)}</button>`).join('')}</div>
           <div class="form-row">
             <select id="wiz-type" class="inp" style="flex:0 0 140px"><option value="m3u">M3U playlist</option><option value="hdhr">HDHomeRun</option></select>
             <input id="wiz-url" class="inp" placeholder="https://provider/playlist.m3u  (or http://hdhomerun-ip)" style="flex:1">
             <button class="btn" id="wiz-add" type="button">Add</button>
           </div>`;
         body.querySelectorAll('#wiz-presets button[data-id]').forEach(b => b.addEventListener('click', async () => {
-          if (b.disabled) return;
-          // Instant feedback — mark added immediately, don't wait or re-render.
-          b.classList.add('added', 'busy');
-          b.textContent = '✓ ' + b.dataset.label;
+          if (b.classList.contains('busy')) return;
+          // Toggle instantly; the server toggles to match, count refreshes after.
+          const adding = !b.classList.contains('added');
+          b.classList.toggle('added', adding);
+          b.textContent = (adding ? '✓ ' : '+ ') + b.dataset.label;
+          b.classList.add('busy');
           try {
             await fetch('/api/sources', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ preset: b.dataset.id }) });
-          } finally {
-            b.classList.remove('busy');
-            b.disabled = true;
-          }
-          wizCount(); afterChange();
+          } finally { b.classList.remove('busy'); }
+          scheduleWizCount();
         }));
         $('wiz-add').addEventListener('click', async () => {
           const url = $('wiz-url').value.trim(); if (!url) return;

@@ -662,10 +662,15 @@ def create_app(config: Config | None = None) -> Flask:
         preset = presets.epg_get((body.get("id") or "").strip())
         if not preset:
             return jsonify({"error": "unknown epg preset"}), 400
-        if preset["url"] not in config.epg_urls:
+        # Toggle: add if absent, remove if already present.
+        if preset["url"] in config.epg_urls:
+            config.epg_urls = [u for u in config.epg_urls if u != preset["url"]]
+            added = False
+        else:
             config.epg_urls.append(preset["url"])
-            _save_and_refresh()
-        return jsonify({"ok": True, "epg_urls": config.epg_urls})
+            added = True
+        _save_and_refresh()
+        return jsonify({"ok": True, "added": added, "epg_urls": config.epg_urls})
 
     @app.get("/api/epg/guide-channels")
     def api_guide_channels() -> Response:
@@ -717,14 +722,20 @@ def create_app(config: Config | None = None) -> Flask:
             if gate:
                 return gate
 
-        # One-click preset: look up a curated source by id.
+        # One-click preset: toggle a curated source by id (add, or remove if
+        # already present so a chip can be un-selected).
         preset_id = (body.get("preset") or "").strip()
         if preset_id:
             preset = presets.get(preset_id)
             if not preset:
                 return jsonify({"error": f"unknown preset {preset_id!r}"}), 400
             if any((s.get("url") or "").strip() == preset["url"] for s in config.sources):
-                return jsonify({"ok": True, "sources": config.sources})  # idempotent
+                config.sources = [
+                    s for s in config.sources
+                    if (s.get("url") or "").strip() != preset["url"]
+                ]
+                _save_and_refresh()
+                return jsonify({"ok": True, "added": False, "sources": config.sources})
             config.sources.append(
                 {
                     "name": preset["name"],
@@ -734,7 +745,7 @@ def create_app(config: Config | None = None) -> Flask:
                 }
             )
             _save_and_refresh()
-            return jsonify({"ok": True, "sources": config.sources})
+            return jsonify({"ok": True, "added": True, "sources": config.sources})
 
         url = (body.get("url") or "").strip()
         if not url:
