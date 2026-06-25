@@ -568,8 +568,21 @@
         }));
         $('wiz-add').addEventListener('click', async () => {
           const url = $('wiz-url').value.trim(); if (!url) return;
-          await fetch('/api/sources', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, type: $('wiz-type').value }) });
-          $('wiz-url').value = ''; renderWiz(); afterChange();
+          const btn = $('wiz-add'); const orig = btn.textContent;
+          btn.disabled = true; btn.textContent = 'Adding…';
+          try {
+            const r = await (await fetch('/api/sources', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, type: $('wiz-type').value }) })).json();
+            if (r && r.error) {
+              btn.textContent = '✕ ' + (r.error.length < 30 ? r.error : 'failed');
+            } else {
+              $('wiz-url').value = '';
+              btn.textContent = '✓ Added';
+            }
+          } catch (e) {
+            btn.textContent = '✕ failed';
+          }
+          setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1400);
+          scheduleWizCount();
         });
         wizCount();
       }

@@ -216,16 +216,19 @@ def load_hdhr(url: str, *, user_agent: str = "Tunaar", timeout: int = 30) -> lis
     MPEG-TS, so Tunaar's normal proxy/ffmpeg path handles them unchanged.
     """
     headers = {"User-Agent": user_agent}
+    # (connect, read): fail fast if the device is unreachable so an offline/
+    # wrong HDHomeRun address can't stall the whole playlist rebuild.
+    to = (5, min(timeout, 15))
     base = url.rstrip("/")
     if base.endswith("lineup.json"):
         lineup_url = base
     elif base.endswith("discover.json"):
-        disc = requests.get(base, timeout=timeout, headers=headers).json()
+        disc = requests.get(base, timeout=to, headers=headers).json()
         lineup_url = disc.get("LineupURL") or base.rsplit("/", 1)[0] + "/lineup.json"
     else:
         lineup_url = base + "/lineup.json"
 
-    data = requests.get(lineup_url, timeout=timeout, headers=headers).json()
+    data = requests.get(lineup_url, timeout=to, headers=headers).json()
     channels: list[Channel] = []
     for item in data:
         number = str(item.get("GuideNumber", "")).strip()
