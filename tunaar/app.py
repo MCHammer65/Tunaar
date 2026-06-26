@@ -192,8 +192,11 @@ class EpgCache:
                             matched_by_name += 1
 
                 lineup_ids = {c.tvg_id for c in chans if c.tvg_id}
+                uniq = self._config.epg_unique_titles
                 if self._config.filter_epg_to_lineup:
-                    self._result = epg.build(full.xml, keep_ids=lineup_ids)
+                    self._result = epg.build(full.xml, keep_ids=lineup_ids, unique_titles=uniq)
+                elif uniq:
+                    self._result = epg.build(full.xml, unique_titles=True)
                 else:
                     self._result = full
                 self._matched = len(lineup_ids & full.channel_ids)
@@ -628,6 +631,7 @@ def create_app(config: Config | None = None) -> Flask:
                 "sources": config.sources,
                 "epg_urls": config.epg_urls,
                 "epg_auto": config.epg_auto,
+                "epg_unique_titles": config.epg_unique_titles,
                 "discovered_epg": channels.discovered_epg,
                 "groups_include": config.groups_include,
                 "groups_exclude": config.groups_exclude,
@@ -790,6 +794,8 @@ def create_app(config: Config | None = None) -> Flask:
         body = request.get_json(silent=True) or {}
         if "epg_auto" in body:
             config.epg_auto = bool(body["epg_auto"])
+        if "epg_unique_titles" in body:
+            config.epg_unique_titles = bool(body["epg_unique_titles"])
         if "epg_urls" in body and isinstance(body["epg_urls"], list):
             # Be forgiving: a user may paste several URLs on one line (separated
             # by spaces/commas) instead of one per line. Split them apart and
@@ -805,7 +811,8 @@ def create_app(config: Config | None = None) -> Flask:
             config.epg_urls = urls
         _save_and_refresh()
         return jsonify(
-            {"ok": True, "epg_urls": config.epg_urls, "epg_auto": config.epg_auto}
+            {"ok": True, "epg_urls": config.epg_urls, "epg_auto": config.epg_auto,
+             "epg_unique_titles": config.epg_unique_titles}
         )
 
     @app.post("/api/groups")

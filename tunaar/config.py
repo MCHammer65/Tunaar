@@ -39,6 +39,10 @@ DEFAULTS: dict = {
     "playlist_refresh": 3600,  # seconds
     "epg_refresh": 3600,  # seconds
     "filter_epg_to_lineup": True,
+    # Work around a Plex DVR bug where programmes that share a <title> get one
+    # shared description: fold the episode/sub-title into the title so each
+    # airing is unique. Opt-in (changes displayed titles).
+    "epg_unique_titles": False,
     "ffmpeg_path": "ffmpeg",
     "discovery": True,  # answer HDHomeRun discovery so Plex auto-finds the tuner
     "discovery_port": 65001,
@@ -104,6 +108,7 @@ class Config:
     playlist_refresh: int = DEFAULTS["playlist_refresh"]
     epg_refresh: int = DEFAULTS["epg_refresh"]
     filter_epg_to_lineup: bool = DEFAULTS["filter_epg_to_lineup"]
+    epg_unique_titles: bool = DEFAULTS["epg_unique_titles"]
     ffmpeg_path: str = DEFAULTS["ffmpeg_path"]
     discovery: bool = DEFAULTS["discovery"]
     discovery_port: int = DEFAULTS["discovery_port"]

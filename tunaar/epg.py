@@ -66,10 +66,27 @@ def fetch(source: str, *, user_agent: str | None = None, timeout: int = 60) -> b
     return raw
 
 
+def _fold_subtitle(programme) -> None:
+    """Append a programme's <sub-title> to its <title> so the title is unique.
+
+    Defeats a Plex DVR bug that shares one description across all programmes
+    with an identical title (e.g. "MLB Baseball" on many channels).
+    """
+    title_el = programme.find("title")
+    sub_el = programme.find("sub-title")
+    if title_el is None or title_el.text is None:
+        return
+    sub = (sub_el.text or "").strip() if sub_el is not None else ""
+    title = title_el.text.strip()
+    if sub and sub.lower() != title.lower() and " — " not in title:
+        title_el.text = f"{title} — {sub}"
+
+
 def build_many(
     raw_docs: list[bytes],
     *,
     keep_ids: set[str] | None = None,
+    unique_titles: bool = False,
 ) -> EpgResult:
     """Merge several XMLTV documents into one, then optionally filter.
 
@@ -98,19 +115,23 @@ def build_many(
     merged = b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(
         root, encoding="utf-8"
     )
-    return build(merged, keep_ids=keep_ids)
+    return build(merged, keep_ids=keep_ids, unique_titles=unique_titles)
 
 
 def build(
     raw_xml: bytes,
     *,
     keep_ids: set[str] | None = None,
+    unique_titles: bool = False,
 ) -> EpgResult:
     """Parse XMLTV ``raw_xml`` and optionally filter it to ``keep_ids``.
 
     When ``keep_ids`` is given, only ``<channel>`` and ``<programme>`` elements
-    referencing those ids are retained. Returns the (possibly filtered) XMLTV
-    along with the set of channel ids actually present and a programme count.
+    referencing those ids are retained. When ``unique_titles`` is set, each
+    programme's ``<sub-title>`` is folded into its ``<title>`` ("Title — Sub")
+    so Plex can't collapse descriptions across airings that share a title.
+    Returns the (possibly filtered) XMLTV along with the set of channel ids
+    actually present and a programme count.
     """
     root = ET.fromstring(raw_xml)
 
@@ -136,6 +157,8 @@ def build(
                 root.remove(child)
                 continue
             programme_count += 1
+            if unique_titles:
+                _fold_subtitle(child)
 
     root.set("generator-info-name", "Tunaar")
     xml = b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(
