@@ -66,20 +66,39 @@ def fetch(source: str, *, user_agent: str | None = None, timeout: int = 60) -> b
     return raw
 
 
+def _disambiguator(programme) -> str:
+    """A short string that distinguishes this airing — sub-title, else a
+    trimmed first line of the description."""
+    sub_el = programme.find("sub-title")
+    sub = (sub_el.text or "").strip() if sub_el is not None else ""
+    if sub:
+        return sub
+    desc_el = programme.find("desc")
+    desc = (desc_el.text or "").strip() if desc_el is not None else ""
+    if not desc:
+        return ""
+    # First sentence/line only, capped so titles stay readable.
+    snippet = re.split(r"(?<=[.!?])\s|\n", desc, maxsplit=1)[0].strip()
+    if len(snippet) > 70:
+        snippet = snippet[:69].rstrip() + "…"
+    return snippet
+
+
 def _fold_subtitle(programme) -> None:
-    """Append a programme's <sub-title> to its <title> so the title is unique.
+    """Append a per-airing disambiguator to a programme's <title> so the title
+    is unique.
 
     Defeats a Plex DVR bug that shares one description across all programmes
-    with an identical title (e.g. "MLB Baseball" on many channels).
+    with an identical title (e.g. "MLB Baseball" on many channels). Uses the
+    <sub-title> when present, otherwise the first line of the <desc>.
     """
     title_el = programme.find("title")
-    sub_el = programme.find("sub-title")
     if title_el is None or title_el.text is None:
         return
-    sub = (sub_el.text or "").strip() if sub_el is not None else ""
     title = title_el.text.strip()
-    if sub and sub.lower() != title.lower() and " — " not in title:
-        title_el.text = f"{title} — {sub}"
+    extra = _disambiguator(programme)
+    if extra and extra.lower() != title.lower() and " — " not in title:
+        title_el.text = f"{title} — {extra}"
 
 
 def build_many(
