@@ -39,10 +39,25 @@ def test_unique_titles_folds_subtitle():
     )
     out = epg.build(doc, unique_titles=True).xml
     assert b"MLB Baseball \xe2\x80\x94 Yankees vs Red Sox" in out  # em dash
-    # No sub-title → title unchanged.
+    # No sub-title and no desc → title unchanged.
     assert b"<title>News</title>" in out
     # Off by default.
     assert b"MLB Baseball</title>" in epg.build(doc).xml
+
+
+def test_unique_titles_desc_fallback():
+    # No sub-title, but a desc → first sentence is folded in, truncated.
+    doc = (
+        b'<tv><channel id="c1"><display-name>S</display-name></channel>'
+        b'<programme start="1" channel="c1"><title>Football</title>'
+        b'<desc>Arsenal v Spurs. North London derby from the Emirates.</desc></programme>'
+        b'</tv>'
+    )
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(epg.build(doc, unique_titles=True).xml)
+    title = root.find("programme/title").text
+    assert title.startswith("Football — Arsenal v Spurs")  # first sentence only
+    assert "North London derby" not in title
 
 
 def test_norm_name():
