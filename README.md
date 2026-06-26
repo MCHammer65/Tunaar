@@ -127,6 +127,29 @@ git clone https://github.com/MCHammer65/PlexIPTV.git tunaar && cd tunaar
 docker compose up -d
 ```
 
+### Unraid
+
+**Docker tab → Add Container** and fill in:
+
+| Field | Value |
+|-------|-------|
+| Name | `Tunaar` |
+| Repository | `ghcr.io/mchammer65/plexiptv:latest` |
+| Network Type | **Host** *(so Plex auto-discovers the tuner via UDP 65001)* |
+| Path | Container `/config` → Host `/mnt/user/appdata/tunaar` |
+| WebUI | `http://[IP]:5004/` |
+
+Apply, then open `http://<unraid-ip>:5004` and run the setup wizard. Config lives in
+`appdata`, so it survives updates. A ready-made template is in
+[`unraid/tunaar.xml`](unraid/tunaar.xml) — drop it in
+`/boot/config/plugins/dockerMan/templates-user/` to get it under *Add Container →
+Template*.
+
+**Updates:** Unraid handles them natively — the Docker tab shows *update available*;
+or install **CA Auto Update Applications** for hands-off updates (no Watchtower needed).
+If you must use bridge networking instead of host, add a port map `5004:5004` and add
+the tuner in Plex manually by IP.
+
 ### Run without Docker
 
 ```bash
