@@ -83,6 +83,24 @@ def test_load_sources_handles_hdhr_type(monkeypatch):
     assert pl.channels[0].group == "Freeview"  # default group for OTA
 
 
+def test_load_sources_skips_failing_source(monkeypatch):
+    good = "#EXTM3U\n#EXTINF:-1,Good\nhttp://x/good\n"
+
+    def fake_fetch(url, **k):
+        if "bad" in url:
+            raise RuntimeError("404 Not Found")
+        return good
+
+    monkeypatch.setattr(m3u, "_fetch_text", fake_fetch)
+    pl = m3u.load_sources([
+        {"url": "http://bad/list.m3u"},
+        {"url": "http://ok/list.m3u"},
+    ])
+    # The good source still loads; the bad one is reported, not fatal.
+    assert [c.name for c in pl.channels] == ["Good"]
+    assert pl.failed == ["http://bad/list.m3u"]
+
+
 def test_load_sources_respects_limit(monkeypatch):
     playlist = "#EXTM3U\n" + "".join(
         f"#EXTINF:-1,Ch{i}\nhttp://x/{i}\n" for i in range(10)

@@ -90,14 +90,24 @@ class ChannelCache:
                 ]
                 m3u.assign_numbers(kept)
                 self._channels = kept
+                # Always stamp the load time, even with some sources skipped, so
+                # a dead source can't trigger a reload storm on every request.
                 self._fetched_at = time.monotonic()
-                self._error = None
+                if playlist.failed:
+                    self._error = (
+                        f"{len(playlist.failed)} source(s) unreachable: "
+                        + ", ".join(playlist.failed)
+                    )
+                else:
+                    self._error = None
                 log.info(
-                    "Playlist loaded: %d channels from %d source(s)",
-                    len(kept), len(self._config.sources),
+                    "Playlist loaded: %d channels from %d/%d source(s)",
+                    len(kept), len(self._config.sources) - len(playlist.failed),
+                    len(self._config.sources),
                 )
             except Exception as exc:  # noqa: BLE001 - surfaced on dashboard
                 self._error = str(exc)
+                self._fetched_at = time.monotonic()  # back off; don't hammer
                 log.error("Playlist load failed: %s", exc)
             return self._channels
 
