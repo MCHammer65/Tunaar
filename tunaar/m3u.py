@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import urllib.parse
 from dataclasses import dataclass, field
 
 import requests
+
+log = logging.getLogger("tunaar")
 
 _ATTR_RE = re.compile(r'([\w-]+)="([^"]*)"')
 _EXTINF_RE = re.compile(r"#EXTINF:-?\d+\s*(?P<attrs>.*?),(?P<name>.*)$")
@@ -34,6 +37,7 @@ class Playlist:
 
     channels: list[Channel]
     epg_urls: list[str] = field(default_factory=list)
+    failed: list[str] = field(default_factory=list)  # sources that couldn't load
 
 
 def parse_document(text: str, *, source: str = "") -> Playlist:
@@ -169,6 +173,7 @@ def load_sources(
     """
     merged: list[Channel] = []
     epg_urls: list[str] = []
+    failed: list[str] = []
 
     for src in sources:
         url = (src.get("url") or "").strip()
@@ -182,30 +187,35 @@ def load_sources(
         except (TypeError, ValueError):
             limit = 0
 
-        if stype == "hdhr":
-            chans = load_hdhr(url, user_agent=user_agent, timeout=timeout)
-            for ch in chans:
-                ch.source = name
-                ch.group = override or "Freeview"
-            if limit > 0:
-                chans = chans[:limit]
-            merged.extend(chans)
-            continue
+        # One bad/unreachable source must not abort the whole merge — skip it.
+        try:
+            if stype == "hdhr":
+                chans = load_hdhr(url, user_agent=user_agent, timeout=timeout)
+                for ch in chans:
+                    ch.source = name
+                    ch.group = override or "Freeview"
+                if limit > 0:
+                    chans = chans[:limit]
+                merged.extend(chans)
+                continue
 
-        text = _fetch_text(url, user_agent=user_agent, timeout=timeout)
-        doc = parse_document(text, source=name)
-        if override:
-            for ch in doc.channels:
-                ch.group = override
-        chans = doc.channels[:limit] if limit > 0 else doc.channels
-        merged.extend(chans)
-        epg_urls.extend(doc.epg_urls)
+            text = _fetch_text(url, user_agent=user_agent, timeout=timeout)
+            doc = parse_document(text, source=name)
+            if override:
+                for ch in doc.channels:
+                    ch.group = override
+            chans = doc.channels[:limit] if limit > 0 else doc.channels
+            merged.extend(chans)
+            epg_urls.extend(doc.epg_urls)
+        except Exception as exc:  # noqa: BLE001 - per-source, non-fatal
+            failed.append(url)
+            log.warning("Source failed, skipping: %s (%s)", url, exc)
 
     assign_numbers(merged)
     # De-duplicate EPG URLs, preserving order.
     seen: set[str] = set()
     unique_epg = [u for u in epg_urls if not (u in seen or seen.add(u))]
-    return Playlist(channels=merged, epg_urls=unique_epg)
+    return Playlist(channels=merged, epg_urls=unique_epg, failed=failed)
 
 
 def load_hdhr(url: str, *, user_agent: str = "Tunaar", timeout: int = 30) -> list[Channel]:
