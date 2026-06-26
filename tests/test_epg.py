@@ -29,6 +29,22 @@ def test_build_filtered_to_lineup():
     assert b"movies.us" not in result.xml
 
 
+def test_unique_titles_folds_subtitle():
+    doc = (
+        b'<tv><channel id="c1"><display-name>Sky</display-name></channel>'
+        b'<programme start="1" channel="c1"><title>MLB Baseball</title>'
+        b'<sub-title>Yankees vs Red Sox</sub-title></programme>'
+        b'<programme start="2" channel="c1"><title>News</title></programme>'
+        b'</tv>'
+    )
+    out = epg.build(doc, unique_titles=True).xml
+    assert b"MLB Baseball \xe2\x80\x94 Yankees vs Red Sox" in out  # em dash
+    # No sub-title → title unchanged.
+    assert b"<title>News</title>" in out
+    # Off by default.
+    assert b"MLB Baseball</title>" in epg.build(doc).xml
+
+
 def test_norm_name():
     assert epg.norm_name("BBC One HD") == epg.norm_name("BBC ONE")
     assert epg.norm_name("Channel 4 (1080p)") == "channel4"
