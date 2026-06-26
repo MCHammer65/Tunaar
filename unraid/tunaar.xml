@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Tunaar</Name>
+  <Repository>ghcr.io/mchammer65/plexiptv:latest</Repository>
+  <Registry>https://github.com/MCHammer65/PlexIPTV/pkgs/container/plexiptv</Registry>
+  <Network>host</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/MCHammer65/Tunaar/issues</Support>
+  <Project>https://github.com/MCHammer65/Tunaar</Project>
+  <Overview>Tunaar is a single-container bridge that makes IPTV M3U playlists and a real HDHomeRun appear in Plex (and Emby/Jellyfin) as one HDHomeRun-style Live TV tuner, with a merged XMLTV guide and ffmpeg-remuxed streaming. Host networking is recommended so Plex auto-discovers the tuner (UDP 65001). Dashboard on port 5004.</Overview>
+  <Category>MediaApp:Video MediaServer:Video</Category>
+  <WebUI>http://[IP]:5004/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/MCHammer65/PlexIPTV/main/tunaar/static/logo.svg</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/tunaar" Mode="rw" Description="Persistent config (sources, guide, groups, license)." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/tunaar</Config>
+  <Config Name="Dashboard port (bridge only)" Target="5004" Default="5004" Mode="tcp" Description="Only used if you switch Network away from host." Type="Port" Display="advanced" Required="false" Mask="false">5004</Config>
+  <Config Name="License public key" Target="TUNAAR_LICENSE_PUBKEY" Default="" Mode="" Description="Optional: your Ed25519 public key (hex) for license validation." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Buy URL" Target="TUNAAR_BUY_URL" Default="" Mode="" Description="Optional: checkout link shown on the dashboard." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+</Container>
