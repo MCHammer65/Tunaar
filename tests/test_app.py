@@ -91,6 +91,14 @@ def test_healthz(client):
     assert client.get("/healthz").get_json()["status"] == "ok"
 
 
+def test_readyz(client):
+    # Channels are pinned in the fixture, so the app reports ready.
+    r = client.get("/readyz")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["status"] == "ready" and body["channels"] == 2
+
+
 def test_dashboard_renders(client):
     html = client.get("/").get_data(as_text=True)
     assert "TestTuner" in html

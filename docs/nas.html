@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tunaar — NAS Deployment (Synology, QNAP, Unraid, TrueNAS…)</title>
+<script>
+  (function () {
+    var s = localStorage.getItem('tunaar-theme');
+    if (!s) s = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', s);
+  })();
+</script>
+<style>
+:root{
+  --bg:#0c0f14;--bg-glow:#1a2030;--panel:#141923;--panel-2:#1b2230;--line:#273042;
+  --text:#e8ecf3;--muted:#8a94a6;--accent:#ff7a18;--accent-2:#ffb347;--ok:#35c46b;
+  --warn:#ffb347;--err:#ff5c5c;--code:#ffd9b0;
+}
+:root[data-theme="light"]{
+  --bg:#f4f6fb;--bg-glow:#ffe6cc;--panel:#fff;--panel-2:#eef1f7;--line:#dfe4ee;
+  --text:#1b2230;--muted:#6b7587;--accent:#e85d04;--accent-2:#f48c06;--ok:#1f9d57;
+  --warn:#c77700;--err:#d64545;--code:#9a3d00;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:radial-gradient(1200px 600px at 80% -10%,var(--bg-glow) 0%,var(--bg) 55%);
+  color:var(--text);min-height:100vh;line-height:1.6}
+a{color:var(--accent-2)}
+header{display:flex;align-items:center;gap:14px;padding:22px 28px;border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);z-index:5}
+header .logo{width:44px;height:44px}
+.brand{font-size:22px;font-weight:700;letter-spacing:.3px}
+.brand span{background:linear-gradient(90deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.ver{color:var(--muted);font-size:12px;margin-left:6px}
+.nav{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.nav a{color:var(--muted);text-decoration:none;font-size:13px;padding:7px 13px;border-radius:999px;border:1px solid transparent}
+.nav a:hover{color:var(--text)}
+.nav a.cta{border-color:var(--line);background:var(--panel-2);color:var(--text)}
+.toggle{background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:999px;
+  padding:7px 12px;font-size:13px;cursor:pointer}
+.toggle:hover{border-color:var(--accent)}
+main{padding:30px 28px 60px;max-width:980px;margin:0 auto}
+.hero{text-align:center;padding:28px 0 10px}
+.hero h1{font-size:34px;margin:14px 0 8px}
+.hero p{color:var(--muted);font-size:17px;max-width:660px;margin:0 auto}
+.pill{display:inline-block;margin-top:14px;font-size:12px;color:var(--muted);border:1px solid var(--line);
+  border-radius:999px;padding:5px 13px;background:var(--panel)}
+h2{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin:42px 0 14px;
+  padding-bottom:8px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:24px 0 8px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:4px 22px 18px}
+pre{background:#0a0d12;border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow:auto;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.55;color:#d6deea}
+:root[data-theme="light"] pre{background:#10141b;color:#d6deea}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em;color:var(--code);
+  background:var(--panel-2);padding:1px 6px;border-radius:5px}
+pre code{background:none;color:inherit;padding:0}
+.cmt{color:#6b7686}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;overflow:hidden;margin-top:6px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}
+th{color:var(--muted);background:var(--panel-2);font-weight:600}
+tr:last-child td{border-bottom:none}
+.note{border-left:3px solid var(--accent);background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:12px 16px;margin:16px 0;font-size:14px}
+.note.warn{border-left-color:var(--warn)}
+.note.ok{border-left-color:var(--ok)}
+.note b{color:var(--text)}
+ol,ul{padding-left:22px}
+li{margin:6px 0}
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps>li{position:relative;padding:0 0 4px 44px;margin:18px 0}
+.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:-2px;width:30px;height:30px;
+  border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#11151c;
+  font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px}
+.steps>li h3{margin:2px 0 6px}
+.tag{display:inline-block;font-size:12px;border:1px solid var(--line);border-radius:999px;padding:1px 9px;background:var(--panel-2);color:var(--accent-2)}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-top:1px solid var(--line);margin-top:40px}
+</style>
+</head>
+<body>
+<header>
+  <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Tunaar">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7a18"/><stop offset="1" stop-color="#ffb347"/></linearGradient></defs>
+    <rect x="6" y="18" width="52" height="38" rx="7" fill="#11151c" stroke="url(#g)" stroke-width="3"/>
+    <path d="M20 18 L32 6 L44 18" fill="none" stroke="url(#g)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="32" cy="6" r="2.6" fill="#ffb347"/>
+    <circle cx="44" cy="37" r="9" fill="none" stroke="url(#g)" stroke-width="3"/>
+    <line x1="44" y1="37" x2="44" y2="30" stroke="#ffb347" stroke-width="3" stroke-linecap="round"/>
+    <rect x="15" y="40" width="4" height="7" rx="1.5" fill="url(#g)"/>
+    <rect x="22" y="35" width="4" height="12" rx="1.5" fill="url(#g)"/>
+    <rect x="29" y="30" width="4" height="17" rx="1.5" fill="url(#g)"/>
+  </svg>
+  <div class="brand">Tun<span>aar</span></div>
+  <span class="ver">NAS Deployment</span>
+  <nav class="nav">
+    <a href="#caveat">Networking</a>
+    <a href="#synology">Synology</a>
+    <a href="#qnap">QNAP</a>
+    <a href="#unraid">Unraid</a>
+    <a href="#truenas">TrueNAS</a>
+    <a href="#portainer">Portainer</a>
+    <a class="cta" href="install.html">Install Guide →</a>
+  </nav>
+  <button class="toggle" id="tg">🌙</button>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Run Tunaar on your <span style="color:var(--accent-2)">NAS</span></h1>
+    <p>Tunaar is one self-contained, multi-arch Docker image (amd64 + arm64) with ffmpeg built in.
+       If your NAS runs containers, it runs Tunaar — Synology, QNAP, Unraid, TrueNAS SCALE, Asustor,
+       Terramaster, OpenMediaVault, or anything with Portainer.</p>
+    <div class="pill">Image: <code>ghcr.io/mchammer65/plexiptv:latest</code></div>
+  </section>
+
+  <h2 id="caveat">The one thing to know first: networking</h2>
+  <p>Tunaar advertises an HDHomeRun tuner that Plex/Emby/Jellyfin can <b>auto-discover</b> over a UDP
+     broadcast on port <code>65001</code>. That broadcast only reaches the container in
+     <b>host networking</b> mode.</p>
+  <table>
+    <tr><th>Mode</th><th>What you get</th><th>When</th></tr>
+    <tr><td><b>Host networking</b> <span class="tag">best</span></td><td>Auto-discovery works; your media server finds Tunaar by itself.</td><td>Unraid, QNAP Container Station, TrueNAS, most Linux NAS.</td></tr>
+    <tr><td><b>Bridge + port map</b></td><td>Map TCP <code>5004</code>; then <b>add the tuner by IP</b> in your media server (<code>http://&lt;nas-ip&gt;:5004</code>). Everything else is identical.</td><td>Synology and anywhere host mode isn't available.</td></tr>
+  </table>
+  <div class="note ok"><b>Both modes stream and serve the guide identically.</b> The only difference is
+    whether the tuner appears automatically or you paste its address once. Always use the URL with the
+    <code>:5004</code> port.</div>
+
+  <h2 id="reference">Reference compose</h2>
+  <p>Every platform below is the same container; this is the canonical definition. Keep <code>/config</code>
+     on a persistent share so your device id and settings survive updates.</p>
+  <div class="panel"><pre><code>services:
+  tunaar:
+    image: ghcr.io/mchammer65/plexiptv:latest
+    container_name: tunaar
+    restart: unless-stopped
+    network_mode: host            <span class="cmt"># or: ports: ["5004:5004"] on Synology</span>
+    environment:
+      - TUNAAR_PLAYLIST=https://iptv-org.github.io/iptv/index.m3u
+      <span class="cmt"># - TUNAAR_EPG_URL=https://example.com/epg.xml</span>
+      <span class="cmt"># - TUNAAR_TUNER_COUNT=4</span>
+    volumes:
+      - /share/appdata/tunaar:/config
+</code></pre></div>
+  <p>You don't have to set a playlist here — leave it empty and add sources from the dashboard wizard at
+     <code>http://&lt;nas-ip&gt;:5004</code> instead.</p>
+
+  <h2 id="synology">Synology (Container Manager / DSM 7.2+)</h2>
+  <ol class="steps">
+    <li><h3>Install Container Manager</h3><p>From <b>Package Center</b> (older DSM: "Docker"). Create a shared
+      folder for config, e.g. <code>/docker/tunaar</code>.</p></li>
+    <li><h3>Create a project</h3><p><b>Container Manager → Project → Create</b>. Paste the reference compose,
+      but Synology doesn't expose host networking on most models, so swap <code>network_mode: host</code> for
+      a port mapping:</p>
+      <div class="panel"><pre><code>    <span class="cmt"># network_mode: host</span>
+    ports:
+      - "5004:5004"
+    volumes:
+      - /volume1/docker/tunaar:/config</code></pre></div></li>
+    <li><h3>Run it</h3><p>Build/start the project. Open <code>http://&lt;nas-ip&gt;:5004</code> and finish the setup wizard.</p></li>
+    <li><h3>Add the tuner by IP</h3><p>In Plex/Emby/Jellyfin DVR setup, choose <b>enter address manually</b>
+      and use <code>http://&lt;nas-ip&gt;:5004</code>, then point the guide at <code>/epg.xml</code>.
+      (Auto-discovery won't work without host networking — this is the only extra step.)</p></li>
+  </ol>
+
+  <h2 id="qnap">QNAP (Container Station)</h2>
+  <ol class="steps">
+    <li><h3>Open Container Station</h3><p>Install it from the QNAP App Center if needed.</p></li>
+    <li><h3>Create an application</h3><p><b>Applications → Create</b> and paste the reference compose as-is —
+      Container Station supports <code>network_mode: host</code>, so auto-discovery works. Point the volume at
+      a real share, e.g. <code>/share/Container/tunaar:/config</code>.</p></li>
+    <li><h3>Start &amp; open</h3><p>Create, then browse to <code>http://&lt;nas-ip&gt;:5004</code> and run the wizard. Plex should find the tuner automatically.</p></li>
+  </ol>
+
+  <h2 id="unraid">Unraid</h2>
+  <ol class="steps">
+    <li><h3>Add the template</h3><p>Easiest: <b>Docker → Add Container</b> and paste the template URL, or import
+      <code>unraid/tunaar.xml</code> from the repo. It pre-fills the image, the <code>/config</code> path and
+      host networking.</p></li>
+    <li><h3>Apply</h3><p>Set your config path (e.g. <code>/mnt/user/appdata/tunaar</code>), keep
+      <b>Network Type: Host</b>, and Apply. Open the WebUI link to the dashboard.</p></li>
+  </ol>
+  <div class="note">Unraid runs host networking by default, so Plex auto-discovery just works.</div>
+
+  <h2 id="truenas">TrueNAS SCALE</h2>
+  <ol class="steps">
+    <li><h3>Use the Docker/compose app</h3><p>On SCALE (Electric Eel+), use <b>Apps → Discover → Custom App</b>
+      (YAML) or the Docker compose pane, and paste the reference compose. Set the host path for
+      <code>/config</code> to a dataset, e.g. <code>/mnt/tank/apps/tunaar</code>.</p></li>
+    <li><h3>Host networking</h3><p>Enable host networking in the app's network options for auto-discovery;
+      otherwise map port <code>5004</code> and add the tuner by IP.</p></li>
+  </ol>
+
+  <h2 id="portainer">Portainer (any platform)</h2>
+  <ol class="steps">
+    <li><h3>New stack</h3><p><b>Stacks → Add stack</b>, paste the reference compose, deploy. Works on any NAS or
+      host where Portainer is installed.</p></li>
+    <li><h3>Plain Docker CLI</h3><p>Or skip the UI entirely:</p>
+      <div class="panel"><pre><code>docker run -d --name tunaar --restart unless-stopped \
+  --network host \
+  -v /share/appdata/tunaar:/config \
+  ghcr.io/mchammer65/plexiptv:latest</code></pre></div></li>
+  </ol>
+
+  <h2 id="health">Health checks</h2>
+  <p>For NAS app managers and orchestrators, Tunaar exposes two endpoints:</p>
+  <table>
+    <tr><th>Endpoint</th><th>Meaning</th></tr>
+    <tr><td><code>/healthz</code></td><td>Liveness — the process is up. Used by the built-in Docker <code>HEALTHCHECK</code>.</td></tr>
+    <tr><td><code>/readyz</code></td><td>Readiness — the lineup has built and Tunaar can serve. Returns <b>503</b> on a hard config/load error (a single skipped source is still "ready").</td></tr>
+  </table>
+
+  <div class="note"><b>Updating:</b> on any platform, pull the latest image and recreate — your
+    <code>/config</code> volume keeps everything. Optionally run the <a href="install.html#updates">Watchtower</a>
+    companion to do it automatically.</div>
+</main>
+
+<footer>
+  Tunaar — IPTV &amp; HDHomeRun for Plex, Emby &amp; Jellyfin · <code>ghcr.io/mchammer65/plexiptv</code><br>
+  Runs anywhere containers do.
+</footer>
+
+<script>
+  var t=document.getElementById('tg');
+  function paint(){t.textContent=document.documentElement.getAttribute('data-theme')==='light'?'☀️':'🌙';}
+  paint();
+  t.addEventListener('click',function(){
+    var n=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';
+    document.documentElement.setAttribute('data-theme',n);
+    localStorage.setItem('tunaar-theme',n);paint();
+  });
+</script>
+</body>
+</html>

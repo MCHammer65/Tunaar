@@ -992,4 +992,21 @@ def create_app(config: Config | None = None) -> Flask:
     def healthz() -> Response:
         return jsonify({"status": "ok", "version": __version__})
 
+    @app.get("/readyz")
+    def readyz() -> Response:
+        """Readiness for orchestrators/NAS health checks.
+
+        Ready once the app can serve and the lineup has been built at least
+        once. A skipped/unreachable source is non-fatal (still ready); a hard
+        config/load error reports not-ready so a NAS can surface it.
+        """
+        chans = channels.get()
+        ready = channels.error is None or bool(chans)
+        body = {
+            "status": "ready" if ready else "not_ready",
+            "version": __version__,
+            "channels": len(chans),
+        }
+        return (jsonify(body), 200) if ready else (jsonify(body), 503)
+
     return app
