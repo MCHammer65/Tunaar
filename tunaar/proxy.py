@@ -150,26 +150,32 @@ def direct_stream(
             time.sleep(min(2 ** attempt, 5))
 
 
-def stabilize(make_source, *, max_retries: int = 20, settle: float = 10.0):
-    """Supervise a byte-stream source, restarting it when it ends prematurely.
+def supervised(candidates, *, max_retries: int = 20, settle: float = 10.0):
+    """Supervise one or more upstream sources, keeping the client fed.
 
-    IPTV sources drop, EOF, or rotate tokens mid-broadcast; when the underlying
-    pull ends, the player would normally lose the channel. ``make_source`` is a
-    zero-arg callable returning a *fresh* byte generator (a new ffmpeg/direct
-    pull). When a source ends while the client is still connected, a new one is
-    started so the feed stays continuous.
+    ``candidates`` is a list of zero-arg factories, each returning a *fresh*
+    byte generator (a new ffmpeg/direct pull) for one upstream. They are tried
+    in priority order:
 
-    A source that ran at least ``settle`` seconds and delivered data is treated
-    as healthy — the drop was a hiccup and the failure budget resets. Sources
-    that die immediately count down ``max_retries`` (with a capped backoff so a
-    permanently-dead source can't hot-loop) before giving up. When the client
-    disconnects, ``GeneratorExit`` propagates through and **no** restart happens.
+    * When a source ends while the client is still connected, a new attempt is
+      started so the feed stays continuous (auto-reconnect).
+    * A source that delivered data and ran at least ``settle`` seconds is
+      healthy — the failure budget resets and we stay on it.
+    * A source that dies quickly counts down ``max_retries`` (capped backoff)
+      and, when more than one candidate exists, **fails over to the next**
+      provider — so a dead source moves on to a live one.
+    * Client disconnect propagates ``GeneratorExit`` through and stops cleanly,
+      with no restart.
     """
+    if not candidates:
+        return
     failures = 0
+    idx = 0
+    n = len(candidates)
     while True:
         started = time.time()
         produced = False
-        source = make_source()
+        source = candidates[idx]()
         try:
             for data in source:
                 produced = True
@@ -180,14 +186,20 @@ def stabilize(make_source, *, max_retries: int = 20, settle: float = 10.0):
             close = getattr(source, "close", None)
             if close is not None:
                 close()
-        # Source ended on its own (client still attached). Restart or give up.
         if produced and (time.time() - started) >= settle:
-            failures = 0  # healthy run — treat the end as a transient hiccup
+            failures = 0  # healthy run — stay on this working source
         else:
             failures += 1
+            if n > 1:
+                idx = (idx + 1) % n  # fail over to the next provider
             if failures > max_retries:
                 return
         time.sleep(min(2 ** min(failures, 3), 5))
+
+
+def stabilize(make_source, *, max_retries: int = 20, settle: float = 10.0):
+    """Single-source supervisor — :func:`supervised` with one candidate."""
+    return supervised([make_source], max_retries=max_retries, settle=settle)
 
 
 def _terminate(proc: subprocess.Popen) -> None:

@@ -193,6 +193,27 @@ def test_align_ids_toggle_persists(client):
     assert client.get("/api/config").get_json()["epg_align_ids"] is True
 
 
+def test_failover_candidates_index(tmp_path, monkeypatch):
+    # Same channel (tvg-id) from two providers → alternates for failover.
+    a = '#EXTM3U\n#EXTINF:-1 tvg-id="bbc",BBC One\nhttp://a/bbc\n'
+    b = '#EXTM3U\n#EXTINF:-1 tvg-id="bbc",BBC One\nhttp://b/bbc\n'
+    monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: a if "one" in src else b)
+    cfg = Config(
+        device_id="FO1",
+        sources=[{"name": "A", "url": "http://x/one.m3u"},
+                 {"name": "B", "url": "http://x/two.m3u"}],
+        stream_mode="redirect",
+        path=str(tmp_path / "config.json"),
+    )
+    app = create_app(cfg)
+    cache = app.config["CHANNELS"]
+    chans = cache.get()
+    primary = next(c for c in chans if c.url == "http://a/bbc")
+    cands = cache.candidates(primary)
+    # Primary first, then the other provider's URL as a failover alternate.
+    assert cands[0] == "http://a/bbc" and "http://b/bbc" in cands
+
+
 def test_feedback_submit_and_list(tmp_path, monkeypatch):
     monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: PLAYLIST)
     cfg = Config(

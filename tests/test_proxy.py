@@ -115,6 +115,37 @@ def test_stabilize_no_restart_on_client_disconnect(monkeypatch):
     assert closed["v"] is True  # underlying source was torn down
 
 
+def test_supervised_fails_over_to_next_source(monkeypatch):
+    import itertools
+    monkeypatch.setattr(proxy.time, "sleep", lambda *_: None)
+    calls = []
+
+    def dead():
+        calls.append("a")
+        return iter(())  # primary is dead
+
+    def live():
+        calls.append("b")
+        return iter((b"x", b"y"))  # alternate produces
+
+    # Primary dies → fails over to the live alternate; take its first output.
+    out = list(itertools.islice(proxy.supervised([dead, live], max_retries=5), 2))
+    assert out == [b"x", b"y"]
+    assert calls[0] == "a" and "b" in calls  # tried primary, then alternate
+
+
+def test_supervised_single_source_equals_stabilize(monkeypatch):
+    monkeypatch.setattr(proxy.time, "sleep", lambda *_: None)
+    n = {"c": 0}
+
+    def make():
+        n["c"] += 1
+        return iter(())
+
+    assert list(proxy.supervised([make], max_retries=2)) == []
+    assert n["c"] == 3  # failures 1,2,3 > 2 → stop
+
+
 def test_ffmpeg_cmd_has_reconnect_and_mpegts():
     cmd = proxy.build_ffmpeg_cmd(
         "http://src/stream", ffmpeg_path="ffmpeg", user_agent="UA"

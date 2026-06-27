@@ -91,6 +91,7 @@ class ChannelCache:
         self._error: str | None = None
         self._failed: list[str] = []
         self._capped = False  # basic-tier caps applied to this load
+        self._alts: dict = {}  # failover index: key -> [urls in priority order]
 
     def _passes_group_filter(self, group: str) -> bool:
         inc = self._config.groups_include
@@ -126,6 +127,15 @@ class ChannelCache:
                     kept = kept[: licensing.BASIC_MAX_CHANNELS]
                 m3u.assign_numbers(kept)
                 self._channels = kept
+                # Failover index: channels sharing a tvg-id (or name) across
+                # sources become alternate upstreams for one another.
+                alts: dict = {}
+                for c in kept:
+                    key = c.tvg_id or epg.norm_name(c.name)
+                    urls = alts.setdefault(key, [])
+                    if c.url and c.url not in urls:
+                        urls.append(c.url)
+                self._alts = alts
                 # Always stamp the load time, even with some sources skipped, so
                 # a dead source can't trigger a reload storm on every request.
                 self._fetched_at = time.monotonic()
@@ -150,6 +160,20 @@ class ChannelCache:
 
     def by_number(self, number: str) -> m3u.Channel | None:
         return next((c for c in self.get() if c.number == number), None)
+
+    def candidates(self, ch: m3u.Channel) -> list[str]:
+        """Upstream URLs for ``ch``, primary first, then failover alternates
+        (other sources of the same channel by tvg-id or name)."""
+        self.get()
+        key = ch.tvg_id or epg.norm_name(ch.name)
+        ordered = [ch.url] + self._alts.get(key, [])
+        seen: set[str] = set()
+        out: list[str] = []
+        for u in ordered:
+            if u and u not in seen:
+                seen.add(u)
+                out.append(u)
+        return out
 
     def invalidate(self) -> None:
         # -inf guarantees staleness regardless of process uptime (monotonic()
@@ -525,21 +549,28 @@ def create_app(config: Config | None = None) -> Flask:
             ch.number, ch.name, "ffmpeg" if use_ffmpeg else "direct",
             request.remote_addr or "?",
         )
-        def make_source():
-            if use_ffmpeg:
-                return proxy.ffmpeg_stream(
-                    ch.url,
-                    ffmpeg_path=config.ffmpeg_path,
-                    user_agent=config.user_agent,
-                    chunk=config.buffer_chunk,
+        def factory(url: str):
+            def make():
+                if use_ffmpeg:
+                    return proxy.ffmpeg_stream(
+                        url,
+                        ffmpeg_path=config.ffmpeg_path,
+                        user_agent=config.user_agent,
+                        chunk=config.buffer_chunk,
+                    )
+                return proxy.direct_stream(
+                    url, user_agent=config.user_agent, chunk=config.buffer_chunk
                 )
-            return proxy.direct_stream(
-                ch.url, user_agent=config.user_agent, chunk=config.buffer_chunk
-            )
+            return make
 
-        # Keep the channel alive across source drops/EOF (premium; off in basic).
+        # Premium: keep the channel alive across drops/EOF and fail over to
+        # alternate sources of the same channel. Basic tier: primary only.
         reconnect = config.stream_reconnect and not basic_locked()
-        source = proxy.stabilize(make_source) if reconnect else make_source()
+        if reconnect:
+            urls = channels.candidates(ch)
+            source = proxy.supervised([factory(u) for u in urls])
+        else:
+            source = factory(ch.url)()
 
         def generate():
             try:
