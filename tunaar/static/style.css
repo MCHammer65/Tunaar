@@ -101,6 +101,10 @@ td img.chlogo { height: 22px; vertical-align: middle; }
 .endpoints a:hover { text-decoration: underline; }
 
 .banner { background: var(--err-bg); border: 1px solid var(--err); color: var(--err-text); padding: 12px 14px; border-radius: 10px; margin-bottom: 18px; font-size: 14px; display: none; }
+/* Softer, non-alarming variant for skipped community sources. */
+.banner.soft { background: color-mix(in srgb, var(--warn) 12%, transparent); border-color: color-mix(in srgb, var(--warn) 45%, transparent); color: var(--text); }
+.banner.soft a { color: var(--accent); }
+.banner a { color: inherit; text-decoration: underline; cursor: pointer; }
 
 .theme-toggle {
   margin-left: auto;

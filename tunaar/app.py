@@ -66,6 +66,7 @@ class ChannelCache:
         self._discovered_epg: list[str] = []
         self._fetched_at = 0.0
         self._error: str | None = None
+        self._failed: list[str] = []
 
     def _passes_group_filter(self, group: str) -> bool:
         inc = self._config.groups_include
@@ -95,6 +96,7 @@ class ChannelCache:
                 # Always stamp the load time, even with some sources skipped, so
                 # a dead source can't trigger a reload storm on every request.
                 self._fetched_at = time.monotonic()
+                self._failed = list(playlist.failed)
                 if playlist.failed:
                     self._error = (
                         f"{len(playlist.failed)} source(s) unreachable: "
@@ -135,6 +137,10 @@ class ChannelCache:
     @property
     def error(self) -> str | None:
         return self._error
+
+    @property
+    def failed(self) -> list[str]:
+        return self._failed
 
 
 class LicenseCache:
@@ -192,6 +198,7 @@ class EpgCache:
         self._result: epg.EpgResult | None = None
         self._fetched_at = 0.0
         self._error: str | None = None
+        self._failed: list[str] = []
         self._matched = 0
         self._sources_used = 0
         self._guide_index: dict = {}  # all guide channels: tvg_id -> display name
@@ -259,6 +266,7 @@ class EpgCache:
                 self._matched = len(lineup_ids & full.channel_ids)
                 self._fetched_at = time.monotonic()
                 # Surface skipped sources without failing the whole guide.
+                self._failed = list(failed)
                 if failed:
                     self._error = (
                         f"{len(failed)} of {len(urls)} EPG source(s) unreachable: "
@@ -293,6 +301,10 @@ class EpgCache:
     @property
     def error(self) -> str | None:
         return self._error
+
+    @property
+    def failed(self) -> list[str]:
+        return self._failed
 
 
 def create_app(config: Config | None = None) -> Flask:
@@ -608,6 +620,7 @@ def create_app(config: Config | None = None) -> Flask:
                 "ffmpeg": proxy.ffmpeg_available(config.ffmpeg_path),
                 "channels": len(chans),
                 "playlist_error": channels.error,
+                "playlist_failed": channels.failed,
                 "epg": {
                     "configured": guide.sources_used > 0,
                     "sources": guide.sources_used,
@@ -615,6 +628,7 @@ def create_app(config: Config | None = None) -> Flask:
                     "matched": guide.matched,
                     "programmes": epg_result.programme_count,
                     "error": guide.error,
+                    "failed": guide.failed,
                 },
                 "groups": len(channels.all_groups),
                 "tuners": {

@@ -221,12 +221,7 @@
         $('epg-sub').textContent = s.epg.configured
           ? `${s.epg.programmes} programmes` : 'not configured';
 
-        const banner = $('banner');
-        const errs = [];
-        if (s.playlist_error) errs.push('Playlist: ' + s.playlist_error);
-        if (s.epg.error) errs.push('EPG: ' + s.epg.error);
-        if (errs.length) { banner.style.display = 'block'; banner.textContent = errs.join('  •  '); }
-        else banner.style.display = 'none';
+        renderBanner(s);
 
         renderLicense(s.license);
 
@@ -342,6 +337,38 @@
     }
 
     function afterChange() { refreshStatus(); loadChannels(); }
+
+    // ---- Status banner: gentle for skipped community sources ----
+    function renderBanner(s) {
+      const banner = $('banner');
+      const failed = [].concat(s.playlist_failed || [], (s.epg && s.epg.failed) || []);
+      // "Hard" errors are real failures not already explained by the skipped list.
+      const hard = [];
+      if (s.playlist_error && !(s.playlist_failed || []).length) hard.push('Playlist: ' + s.playlist_error);
+      if (s.epg && s.epg.error && !(s.epg.failed || []).length) hard.push('EPG: ' + s.epg.error);
+      if (!failed.length && !hard.length) { banner.style.display = 'none'; return; }
+
+      banner.style.display = 'block';
+      banner.className = 'banner' + (hard.length ? '' : ' soft');
+      let html = '';
+      if (failed.length) {
+        const n = failed.length;
+        html += `<span>${n} community source${n > 1 ? 's are' : ' is'} currently unavailable — ` +
+          `skipped automatically, everything else is working.</span> ` +
+          `<a href="#" id="banner-toggle">details</a>` +
+          `<div id="banner-details" style="display:none;margin-top:8px;font-size:12px;opacity:.85">` +
+          failed.map(esc).join('<br>') + `</div>`;
+      }
+      if (hard.length) html += `<div style="margin-top:${failed.length ? 8 : 0}px">` + hard.map(esc).join('  •  ') + `</div>`;
+      banner.innerHTML = html;
+      const t = $('banner-toggle');
+      if (t) t.addEventListener('click', (e) => {
+        e.preventDefault();
+        const d = $('banner-details');
+        d.style.display = d.style.display === 'none' ? 'block' : 'none';
+        t.textContent = d.style.display === 'none' ? 'details' : 'hide';
+      });
+    }
 
     // ---- License ----
     function renderLicense(lic) {
