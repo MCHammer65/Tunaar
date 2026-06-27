@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Minimal pure-Python Ed25519 (RFC 8032), vendored to avoid a native dep.
 
 Used only for license signing/verification, which isn't performance-critical.

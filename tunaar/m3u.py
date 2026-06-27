@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Parsing of extended M3U (M3U8) IPTV playlists."""
 
 from __future__ import annotations

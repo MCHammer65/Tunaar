@@ -1,0 +1,51 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# CLA Assistant — requires every external contributor to sign CLA.md before
+# their PR can be merged. Signatures are stored in the `cla-signatures` branch.
+#
+# ONE-TIME SETUP (repo owner):
+#   1. Create a classic Personal Access Token with `repo` scope.
+#   2. Add it as a repo secret named CLA_SIGNATURES_TOKEN
+#      (Settings → Secrets and variables → Actions → New repository secret).
+#   The default GITHUB_TOKEN can't push to the signatures branch, hence the PAT.
+
+name: CLA Assistant
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, closed, synchronize]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    steps:
+      - name: CLA Assistant
+        if: >
+          (github.event.comment.body == 'recheck'
+           || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')
+          || github.event_name == 'pull_request_target'
+        uses: contributor-assistant/github-action@v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT with `repo` scope, used to store signatures (see setup above).
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.CLA_SIGNATURES_TOKEN }}
+        with:
+          path-to-document: 'https://github.com/MCHammer65/Tunaar/blob/main/CLA.md'
+          path-to-signatures: 'signatures/version1/cla.json'
+          branch: 'cla-signatures'
+          allowlist: 'MCHammer65,dependabot[bot],*[bot]'
+          custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
+          custom-notsigned-prcomment: >
+            Thanks for your pull request! Before we can merge it, please read our
+            [Contributor License Agreement](https://github.com/MCHammer65/Tunaar/blob/main/CLA.md)
+            and sign it by posting the comment below in this PR.
+          custom-allsigned-prcomment: '✅ All contributors have signed the CLA.'

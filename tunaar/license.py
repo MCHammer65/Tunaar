@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Offline license verification and trial tracking.
 
 Tunaar is self-hosted, so licensing is honour-based: the goal is to make paying

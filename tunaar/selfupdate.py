@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """One-click self-update for the admin console.
 
 ``check()`` compares the running image against the registry. ``apply()`` pulls

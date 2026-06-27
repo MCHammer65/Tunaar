@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Lemon Squeezy → Tunaar license webhook (owner-side service).
 
 This is **not** part of the Tunaar container — it's a tiny service you host to

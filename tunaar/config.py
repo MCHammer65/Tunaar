@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Configuration handling for Tunaar.
 
 Config is loaded from a JSON file merged over sane defaults, validated, and

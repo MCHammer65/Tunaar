@@ -17,10 +17,13 @@ following:
    the right to relicense it** — including under the AGPL-3.0 and under a
    separate commercial license. You retain copyright to your contribution; this
    is a license grant, not an assignment. This is what allows Tunaar to be
-   offered commercially alongside the open-source version.
+   offered commercially alongside the open-source version. The full terms are
+   in **[CLA.md](CLA.md)**.
 
-If you can't agree to the CLA, please open an issue to discuss before sending
-code.
+The CLA is enforced automatically: the first time you open a pull request, the
+**CLA Assistant** bot will ask you to sign by posting a one-line comment. Your
+PR can't be merged until it's signed (you only sign once). If you can't agree to
+the CLA, please open an issue to discuss before sending code.
 
 ### Signing off your commits
 

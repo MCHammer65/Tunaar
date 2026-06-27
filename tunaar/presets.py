@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Curated source presets for one-click setup.
 
 Each preset is a normal M3U source. The mjh.nz playlists advertise their

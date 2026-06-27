@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """HDHomeRun network-discovery responder.
 
 Plex (and other HDHomeRun clients) find network tuners by broadcasting a small
