@@ -45,6 +45,10 @@ DEFAULTS: dict = {
     # shared description: fold the episode/sub-title into the title so each
     # airing is unique. Opt-in (changes displayed titles).
     "epg_unique_titles": False,
+    # Guarantee the guide attaches in every player: re-key the served XMLTV so
+    # each channel's id is its lineup number, matching the tuner's GuideNumber.
+    # Kills the "0 channels matched" headache. Opt-in.
+    "epg_align_ids": False,
     "ffmpeg_path": "ffmpeg",
     "discovery": True,  # answer HDHomeRun discovery so Plex auto-finds the tuner
     "discovery_port": 65001,
@@ -112,6 +116,7 @@ class Config:
     epg_refresh: int = DEFAULTS["epg_refresh"]
     filter_epg_to_lineup: bool = DEFAULTS["filter_epg_to_lineup"]
     epg_unique_titles: bool = DEFAULTS["epg_unique_titles"]
+    epg_align_ids: bool = DEFAULTS["epg_align_ids"]
     ffmpeg_path: str = DEFAULTS["ffmpeg_path"]
     discovery: bool = DEFAULTS["discovery"]
     discovery_port: int = DEFAULTS["discovery_port"]

@@ -10,6 +10,7 @@ Plex / Emby / Jellyfin as the guide source.
 
 from __future__ import annotations
 
+import copy
 import gzip
 import re
 import xml.etree.ElementTree as ET
@@ -175,6 +176,82 @@ def build_many(
         root, encoding="utf-8"
     )
     return build(merged, keep_ids=keep_ids, unique_titles=unique_titles)
+
+
+def align(
+    raw_xml: bytes,
+    number_to_id: dict[str, str],
+    *,
+    unique_titles: bool = False,
+) -> EpgResult:
+    """Re-key the guide so every lineup channel *number* is its own ``<channel>``.
+
+    ``number_to_id`` maps a lineup channel number to the guide channel id it
+    matched (by tvg-id, name, or a manual override). For each entry, the matched
+    guide ``<channel>`` and its ``<programme>`` elements are cloned with the
+    channel id rewritten to the lineup number, and the number is also added as a
+    ``<display-name>``.
+
+    This guarantees Plex / Emby / Jellyfin attach guide data by channel number
+    with no manual mapping — the tuner's ``GuideNumber`` and the XMLTV channel id
+    are then identical. A guide channel matched by several lineup numbers is
+    duplicated, one copy per number, so nothing is lost.
+    """
+    root = ET.fromstring(raw_xml)
+    src_channels: dict = {}
+    src_programmes: dict = {}
+    for child in list(root):
+        if child.tag == "channel":
+            src_channels[child.get("id", "")] = child
+        elif child.tag == "programme":
+            src_programmes.setdefault(child.get("channel", ""), []).append(child)
+
+    channel_els: list = []
+    programme_els: list = []
+    channel_ids: set[str] = set()
+    name_to_id: dict = {}
+    id_to_name: dict = {}
+    seq: dict = {}
+
+    for number, gid in number_to_id.items():
+        new_ch = ET.Element("channel")
+        new_ch.set("id", number)
+        src_ch = src_channels.get(gid)
+        if src_ch is not None:
+            for sub in list(src_ch):
+                new_ch.append(copy.deepcopy(sub))
+            for dn in src_ch.findall("display-name"):
+                if dn.text:
+                    name_to_id.setdefault(norm_name(dn.text), number)
+                    id_to_name.setdefault(number, dn.text.strip())
+        # The channel number as an extra display-name, so players that match on
+        # number (not just on id) attach too.
+        ET.SubElement(new_ch, "display-name").text = number
+        channel_els.append(new_ch)
+        channel_ids.add(number)
+
+        for prog in src_programmes.get(gid, []):
+            clone = copy.deepcopy(prog)
+            clone.set("channel", number)
+            if unique_titles:
+                _disambiguate(clone, seq)
+            programme_els.append(clone)
+
+    out = ET.Element("tv")
+    out.set("generator-info-name", "Tunaar")
+    out.extend(channel_els)
+    out.extend(programme_els)
+
+    xml = b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(
+        out, encoding="utf-8"
+    )
+    return EpgResult(
+        xml=xml,
+        channel_ids=channel_ids,
+        programme_count=len(programme_els),
+        name_to_id=name_to_id,
+        id_to_name=id_to_name,
+    )
 
 
 def build(

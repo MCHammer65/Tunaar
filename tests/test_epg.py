@@ -102,6 +102,58 @@ def test_unique_titles_no_episode_num_without_date():
     assert prog.find("episode-num") is None
 
 
+def test_align_rekeys_channels_to_numbers():
+    import xml.etree.ElementTree as ET
+    doc = (
+        b'<tv><channel id="bbc1.uk"><display-name>BBC One</display-name></channel>'
+        b'<programme start="20260627060000" channel="bbc1.uk"><title>Breakfast</title></programme>'
+        b'</tv>'
+    )
+    result = epg.align(doc, {"3": "bbc1.uk"})
+    root = ET.fromstring(result.xml)
+    ch = root.find("channel")
+    # Channel id is now the lineup number; the number is also a display-name.
+    assert ch.get("id") == "3"
+    names = [d.text for d in ch.findall("display-name")]
+    assert "BBC One" in names and "3" in names
+    # The programme is re-pointed at the number.
+    assert root.find("programme").get("channel") == "3"
+    assert result.channel_ids == {"3"}
+    assert result.programme_count == 1
+
+
+def test_align_duplicates_shared_guide_channel():
+    # Two lineup channels pointing at the same guide id each get their own copy.
+    import xml.etree.ElementTree as ET
+    doc = (
+        b'<tv><channel id="news.x"><display-name>News</display-name></channel>'
+        b'<programme start="20260627060000" channel="news.x"><title>Headlines</title></programme>'
+        b'</tv>'
+    )
+    result = epg.align(doc, {"5": "news.x", "6": "news.x"})
+    root = ET.fromstring(result.xml)
+    ids = sorted(c.get("id") for c in root.findall("channel"))
+    assert ids == ["5", "6"]
+    chans = sorted(p.get("channel") for p in root.findall("programme"))
+    assert chans == ["5", "6"]
+
+
+def test_align_skips_unmatched_and_applies_unique_titles():
+    import xml.etree.ElementTree as ET
+    doc = (
+        b'<tv><channel id="c1"><display-name>Movies</display-name></channel>'
+        b'<programme start="20260627060000" channel="c1"><title>Film</title></programme>'
+        b'</tv>'
+    )
+    # "9" matches a real channel; "10" points at a missing id (still emitted,
+    # just with no programmes) — align never raises on a stale mapping.
+    result = epg.align(doc, {"9": "c1"}, unique_titles=True)
+    root = ET.fromstring(result.xml)
+    prog = root.find("programme")
+    nums = [e.text for e in prog.findall("episode-num") if e.get("system") == "onscreen"]
+    assert nums == ["S2026E178"]  # date-based episode-num injected post-align
+
+
 def test_norm_name():
     assert epg.norm_name("BBC One HD") == epg.norm_name("BBC ONE")
     assert epg.norm_name("Channel 4 (1080p)") == "channel4"

@@ -154,6 +154,45 @@ def test_epg_map_requires_name(client):
     assert client.post("/api/epg/map", json={"tvg_id": "x"}).status_code == 400
 
 
+def test_align_ids_guarantees_match(tmp_path, monkeypatch):
+    # Channel carries a tvg-id that matches the guide, but we want the served
+    # guide re-keyed to the lineup number so any player attaches it.
+    playlist = '#EXTM3U\n#EXTINF:-1 tvg-id="bbc1.uk",BBC One\nhttp://x/bbc\n'
+    epg_xml = (
+        b'<?xml version="1.0"?><tv>'
+        b'<channel id="bbc1.uk"><display-name>BBC One</display-name></channel>'
+        b'<programme start="20260101060000 +0000" channel="bbc1.uk"><title>News</title></programme>'
+        b'</tv>'
+    )
+    monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: playlist)
+    monkeypatch.setattr("tunaar.epg.fetch", lambda url, **k: epg_xml)
+
+    cfg = Config(
+        device_id="ALN1",
+        sources=[{"name": "IPTV", "url": "http://x/l.m3u"}],
+        epg_urls=["http://x/guide.xml"],
+        epg_auto=False,
+        epg_align_ids=True,
+        stream_mode="redirect",
+        path=str(tmp_path / "config.json"),
+    )
+    client = create_app(cfg).test_client()
+
+    number = client.get("/api/channels").get_json()[0]["number"]
+    served = client.get("/epg.xml").get_data()
+    # The served guide is keyed on the lineup number, not the original tvg-id.
+    assert f'<channel id="{number}"'.encode() in served
+    assert b'id="bbc1.uk"' not in served
+    assert f'channel="{number}"'.encode() in served
+    assert client.get("/api/status").get_json()["epg"]["matched"] == 1
+
+
+def test_align_ids_toggle_persists(client):
+    r = client.post("/api/epg", json={"epg_align_ids": True})
+    assert r.status_code == 200 and r.get_json()["epg_align_ids"] is True
+    assert client.get("/api/config").get_json()["epg_align_ids"] is True
+
+
 def test_setup_complete_flag(client, app):
     # Fresh config defaults to not-complete so the wizard auto-opens.
     assert client.get("/api/config").get_json()["setup_complete"] is False

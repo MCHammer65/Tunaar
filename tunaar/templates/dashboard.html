@@ -118,6 +118,10 @@
           <input id="epg-unique" type="checkbox">
           <span>Fix Plex duplicate-description bug</span>
         </label>
+        <label class="switch" title="Re-keys the served guide so each channel's XMLTV id is its lineup number — Plex, Emby & Jellyfin then attach guide data automatically, with no 'channels matched: 0'.">
+          <input id="epg-align" type="checkbox">
+          <span>Guarantee guide match (align IDs to channel numbers)</span>
+        </label>
         <p class="hint">Quick add a regional guide:</p>
         <div id="epg-presets" class="form-row" style="flex-wrap:wrap;gap:6px;margin-top:0"></div>
         <p class="hint">Extra XMLTV URLs (one per line) are merged with the auto-detected guide.</p>
@@ -336,6 +340,7 @@
       // epg
       $('epg-auto').checked = !!cfg.epg_auto;
       if ($('epg-unique')) $('epg-unique').checked = !!cfg.epg_unique_titles;
+      if ($('epg-align')) $('epg-align').checked = !!cfg.epg_align_ids;
       $('epg-urls').value = (cfg.epg_urls || []).join('\n');
       $('epg-discovered').innerHTML = (cfg.discovered_epg || []).length
         ? 'Auto-detected: ' + cfg.discovered_epg.map(esc).join(', ') : '';
@@ -524,7 +529,7 @@
       const urls = $('epg-urls').value.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
       await fetch('/api/epg', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ epg_urls: urls, epg_auto: $('epg-auto').checked, epg_unique_titles: $('epg-unique').checked })
+        body: JSON.stringify({ epg_urls: urls, epg_auto: $('epg-auto').checked, epg_unique_titles: $('epg-unique').checked, epg_align_ids: $('epg-align').checked })
       });
       loadConfig(); afterChange();
     });

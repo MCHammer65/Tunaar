@@ -257,13 +257,24 @@ class EpgCache:
 
                 lineup_ids = {c.tvg_id for c in chans if c.tvg_id}
                 uniq = self._config.epg_unique_titles
-                if self._config.filter_epg_to_lineup:
-                    self._result = epg.build(full.xml, keep_ids=lineup_ids, unique_titles=uniq)
-                elif uniq:
-                    self._result = epg.build(full.xml, unique_titles=True)
+                if self._config.epg_align_ids:
+                    # Re-key the guide to lineup numbers so every player matches
+                    # by channel number — no "0 channels matched".
+                    number_to_id = {
+                        c.number: c.tvg_id
+                        for c in chans
+                        if c.tvg_id and c.tvg_id in full.channel_ids
+                    }
+                    self._result = epg.align(full.xml, number_to_id, unique_titles=uniq)
+                    self._matched = len(number_to_id)
                 else:
-                    self._result = full
-                self._matched = len(lineup_ids & full.channel_ids)
+                    if self._config.filter_epg_to_lineup:
+                        self._result = epg.build(full.xml, keep_ids=lineup_ids, unique_titles=uniq)
+                    elif uniq:
+                        self._result = epg.build(full.xml, unique_titles=True)
+                    else:
+                        self._result = full
+                    self._matched = len(lineup_ids & full.channel_ids)
                 self._fetched_at = time.monotonic()
                 # Surface skipped sources without failing the whole guide.
                 self._failed = list(failed)
@@ -734,6 +745,7 @@ def create_app(config: Config | None = None) -> Flask:
                 "epg_urls": config.epg_urls,
                 "epg_auto": config.epg_auto,
                 "epg_unique_titles": config.epg_unique_titles,
+                "epg_align_ids": config.epg_align_ids,
                 "discovered_epg": channels.discovered_epg,
                 "groups_include": config.groups_include,
                 "groups_exclude": config.groups_exclude,
@@ -901,6 +913,8 @@ def create_app(config: Config | None = None) -> Flask:
             config.epg_auto = bool(body["epg_auto"])
         if "epg_unique_titles" in body:
             config.epg_unique_titles = bool(body["epg_unique_titles"])
+        if "epg_align_ids" in body:
+            config.epg_align_ids = bool(body["epg_align_ids"])
         if "epg_urls" in body and isinstance(body["epg_urls"], list):
             # Be forgiving: a user may paste several URLs on one line (separated
             # by spaces/commas) instead of one per line. Split them apart and
@@ -917,7 +931,8 @@ def create_app(config: Config | None = None) -> Flask:
         _save_and_refresh()
         return jsonify(
             {"ok": True, "epg_urls": config.epg_urls, "epg_auto": config.epg_auto,
-             "epg_unique_titles": config.epg_unique_titles}
+             "epg_unique_titles": config.epg_unique_titles,
+             "epg_align_ids": config.epg_align_ids}
         )
 
     @app.post("/api/groups")

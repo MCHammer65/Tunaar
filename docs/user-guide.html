@@ -199,10 +199,25 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
       <li><b>Quick-add guides</b>: one-click buttons for regional XMLTV guides (UK/US/CA/FR/DE).</li>
       <li><b>Manual URLs</b>: paste extra XMLTV guide links (one per line), e.g. a UK Freeview guide for OTA channels.</li>
       <li><b>Name matching</b>: channels without a guide ID are matched to guide entries by name (HD/quality differences ignored), so OTA/HDHomeRun channels get data automatically.</li>
+      <li><b>Guarantee guide match</b> (optional): see below.</li>
       <li><b>Fix Plex duplicate-description bug</b> (optional): see below.</li>
     </ul>
     <p>Tunaar serves the merged result at <code>/epg.xml</code> — that's the single URL you give Plex.</p>
     <div class="note">Paste <b>one URL per line</b> (Tunaar also splits multiple URLs pasted on one line). If a source is unreachable it's skipped with a notice rather than wiping the whole guide, and guides are fetched with a browser user-agent so hosts that block bots still work.</div>
+
+    <h3>Guarantee guide match</h3>
+    <p>The single most common IPTV headache in <em>any</em> player is <b>"channels matched: 0"</b> — the guide
+       loads, but none of it attaches to your channels. It happens whenever a channel's <code>tvg-id</code>
+       doesn't line up with the id used inside the XMLTV guide.</p>
+    <p>Because Tunaar owns <b>both</b> sides — your lineup <em>and</em> the guide it serves — it can simply make
+       them agree. Tick <b>Guarantee guide match (align IDs to channel numbers)</b> and Tunaar re-keys the
+       served guide so each channel's XMLTV id <b>is its channel number</b> — the same number the tuner reports
+       to Plex. The result: Plex, Emby and Jellyfin attach guide data <b>automatically, with no manual
+       mapping</b>.</p>
+    <div class="note ok"><b>When to use it:</b> turn it on if your guide loads but the match count stays low.
+       It uses Tunaar's existing matching (tvg-id, then name, then any manual mappings you've set) to decide
+       which guide channel belongs to each lineup number, then locks that in so the player can't get it wrong.
+       Off by default since it changes the served guide; manual mappings still apply and still win.</div>
 
     <h3>Fix Plex duplicate-description bug</h3>
     <p>Plex's DVR keys programme descriptions by <b>title</b>, so airings that share a title — classic
