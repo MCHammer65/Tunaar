@@ -229,4 +229,15 @@ pytest
 
 ## License
 
-See [LICENSE](LICENSE).
+Tunaar is licensed under the **GNU Affero General Public License v3.0 or later**
+(AGPL-3.0-or-later) — see [LICENSE](LICENSE) and [NOTICE](NOTICE). In short:
+you're free to use, modify and self-host it, but if you run a modified version
+as a network service you must make your source changes available under the same
+license.
+
+**Commercial license available.** If the AGPL doesn't suit your use (e.g. you
+want to ship a modified, closed-source version as a hosted service), a separate
+commercial license can be arranged — see [NOTICE](NOTICE).
+
+Contributions are accepted under the project's [Contributor License
+Agreement](CONTRIBUTING.md), which keeps dual-licensing possible.
