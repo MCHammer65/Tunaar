@@ -200,6 +200,8 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
       <li><b>Quick-add guides</b>: one-click buttons for regional XMLTV guides (UK/US/CA/FR/DE).</li>
       <li><b>Manual URLs</b>: paste extra XMLTV guide links (one per line), e.g. a UK Freeview guide for OTA channels.</li>
       <li><b>Name matching</b>: channels without a guide ID are matched to guide entries by name (HD/quality differences ignored), so OTA/HDHomeRun channels get data automatically.</li>
+      <li><b>Channel logos</b>: your playlist's <code>tvg-logo</code> images are embedded into the served guide, so logos show consistently in every player.</li>
+      <li><b>Timezone hygiene</b>: set <code>TUNAAR_EPG_TZ_OFFSET</code> (e.g. <code>+0000</code>) to stamp an offset onto guide times that lack one, fixing drift on feeds that omit it.</li>
       <li><b>Guarantee guide match</b> (optional): see below.</li>
       <li><b>Fix Plex duplicate-description bug</b> (optional): see below.</li>
     </ul>

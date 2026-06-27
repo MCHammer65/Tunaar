@@ -102,6 +102,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
     <a href="#unraid">Unraid</a>
     <a href="#truenas">TrueNAS</a>
     <a href="#portainer">Portainer</a>
+    <a href="#vpn">VPN</a>
     <a class="cta" href="install.html">Install Guide →</a>
   </nav>
   <button class="toggle" id="tg">🌙</button>
@@ -204,6 +205,32 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
   -v /share/appdata/tunaar:/config \
   ghcr.io/mchammer65/plexiptv:latest</code></pre></div></li>
   </ol>
+
+  <h2 id="vpn">Routing Tunaar through a VPN</h2>
+  <p>If your IPTV provider needs a VPN, run Tunaar's traffic through a VPN sidecar
+     (e.g. <a href="https://github.com/qdm12/gluetun" target="_blank" rel="noopener">gluetun</a>) and
+     share its network. Tunaar's upstream fetches and streams then egress via the VPN, while your
+     media server still reaches the dashboard/tuner on the LAN.</p>
+  <div class="panel"><pre><code>services:
+  vpn:
+    image: qmcgaw/gluetun
+    cap_add: ["NET_ADMIN"]
+    environment:
+      - VPN_SERVICE_PROVIDER=your-provider
+      <span class="cmt"># …provider creds per gluetun docs…</span>
+    ports:
+      - "5004:5004"            <span class="cmt"># expose Tunaar via the VPN container</span>
+
+  tunaar:
+    image: ghcr.io/mchammer65/plexiptv:latest
+    network_mode: "service:vpn"   <span class="cmt"># all Tunaar traffic egresses via the VPN</span>
+    depends_on: [vpn]
+    volumes:
+      - /share/appdata/tunaar:/config
+</code></pre></div>
+  <div class="note warn"><b>Discovery note:</b> sharing the VPN's network means no host networking, so add
+    the tuner by IP (<code>http://&lt;nas-ip&gt;:5004</code>) in your media server rather than relying on
+    auto-discovery.</div>
 
   <h2 id="health">Health checks</h2>
   <p>For NAS app managers and orchestrators, Tunaar exposes two endpoints:</p>
