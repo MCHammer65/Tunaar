@@ -1088,6 +1088,61 @@ def create_app(config: Config | None = None) -> Flask:
             "submit_url": "" if fb.issue_url else feedback_hub.issue_url(fb),
         })
 
+    # -- PWA (installable, offline shell) -------------------------------
+
+    @app.get("/manifest.webmanifest")
+    def manifest() -> Response:
+        return jsonify({
+            "name": config.friendly_name,
+            "short_name": config.friendly_name,
+            "start_url": "/",
+            "scope": "/",
+            "display": "standalone",
+            "background_color": "#0c0f14",
+            "theme_color": "#0c0f14",
+            "icons": [{
+                "src": "/static/logo.svg",
+                "sizes": "any",
+                "type": "image/svg+xml",
+                "purpose": "any maskable",
+            }],
+        })
+
+    @app.get("/sw.js")
+    def service_worker() -> Response:
+        sw = """
+const CACHE = 'tunaar-shell-v1';
+const SHELL = ['/', '/static/style.css', '/static/logo.svg', '/manifest.webmanifest'];
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));
+  self.skipWaiting();
+});
+self.addEventListener('activate', (e) => {
+  e.waitUntil(caches.keys().then((ks) =>
+    Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));
+  self.clients.claim();
+});
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== location.origin) return;
+  // Live data and streams always hit the network, never the cache.
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/stream/')) return;
+  e.respondWith(
+    fetch(req).then((resp) => {
+      const copy = resp.clone();
+      caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+      return resp;
+    }).catch(() => caches.match(req))
+  );
+});
+""".strip()
+        resp = Response(sw, mimetype="application/javascript")
+        resp.headers["Service-Worker-Allowed"] = "/"
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     @app.get("/healthz")
     def healthz() -> Response:
         return jsonify({"status": "ok", "version": __version__})

@@ -2,9 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{{ name }} — IPTV for Plex</title>
   <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}">
+  <!-- PWA: installable on mobile/desktop, offline shell -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0c0f14">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="{{ name }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script>
     // Apply saved theme before first paint to avoid a flash.
@@ -790,6 +798,13 @@
 
     refreshStatus(); loadChannels();
     setInterval(refreshStatus, 4000);
+
+    // PWA: register the service worker for installability + offline shell.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
   </script>
 </body>
 </html>

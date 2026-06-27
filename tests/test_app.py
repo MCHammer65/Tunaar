@@ -91,6 +91,19 @@ def test_healthz(client):
     assert client.get("/healthz").get_json()["status"] == "ok"
 
 
+def test_pwa_manifest_and_sw(client):
+    m = client.get("/manifest.webmanifest")
+    assert m.status_code == 200
+    data = m.get_json()
+    assert data["display"] == "standalone" and data["start_url"] == "/"
+    assert data["icons"]
+    sw = client.get("/sw.js")
+    assert sw.status_code == 200
+    assert "application/javascript" in sw.headers["Content-Type"]
+    assert sw.headers.get("Service-Worker-Allowed") == "/"
+    assert b"addEventListener('fetch'" in sw.get_data()
+
+
 def test_security_headers(client):
     h = client.get("/healthz").headers
     assert h.get("X-Content-Type-Options") == "nosniff"
