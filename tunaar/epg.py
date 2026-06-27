@@ -142,11 +142,37 @@ def _disambiguate(programme, seq: dict) -> None:
     onscreen.text = f"S{year}E{doy:03d}" + (f".{n + 1}" if n else "")
 
 
+def _set_icon(channel_el, logo: str) -> None:
+    """Add an ``<icon src>`` to a channel so logos show in every player.
+
+    No-op when there's no logo or the channel already carries an icon (the
+    guide's own logo wins over the lineup's).
+    """
+    if not logo or channel_el.find("icon") is not None:
+        return
+    ET.SubElement(channel_el, "icon").set("src", logo)
+
+
+def _apply_tz(programme, offset: str) -> None:
+    """Stamp a timezone ``offset`` (e.g. "+0000") onto bare programme times.
+
+    XMLTV times should carry an offset ("20260627060000 +0000"); feeds that
+    omit it make players guess and drift. Only offset-less, all-digit
+    timestamps are touched — times that already declare an offset are left as-is.
+    """
+    for attr in ("start", "stop"):
+        val = (programme.get(attr) or "").strip()
+        if val and val.isdigit():
+            programme.set(attr, f"{val} {offset}")
+
+
 def build_many(
     raw_docs: list[bytes],
     *,
     keep_ids: set[str] | None = None,
     unique_titles: bool = False,
+    logos: dict | None = None,
+    tz_offset: str = "",
 ) -> EpgResult:
     """Merge several XMLTV documents into one, then optionally filter.
 
@@ -175,7 +201,8 @@ def build_many(
     merged = b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(
         root, encoding="utf-8"
     )
-    return build(merged, keep_ids=keep_ids, unique_titles=unique_titles)
+    return build(merged, keep_ids=keep_ids, unique_titles=unique_titles,
+                 logos=logos, tz_offset=tz_offset)
 
 
 def align(
@@ -183,6 +210,8 @@ def align(
     number_to_id: dict[str, str],
     *,
     unique_titles: bool = False,
+    logos: dict | None = None,
+    tz_offset: str = "",
 ) -> EpgResult:
     """Re-key the guide so every lineup channel *number* is its own ``<channel>``.
 
@@ -227,6 +256,8 @@ def align(
         # The channel number as an extra display-name, so players that match on
         # number (not just on id) attach too.
         ET.SubElement(new_ch, "display-name").text = number
+        if logos:
+            _set_icon(new_ch, logos.get(number, ""))
         channel_els.append(new_ch)
         channel_ids.add(number)
 
@@ -235,6 +266,8 @@ def align(
             clone.set("channel", number)
             if unique_titles:
                 _disambiguate(clone, seq)
+            if tz_offset:
+                _apply_tz(clone, tz_offset)
             programme_els.append(clone)
 
     out = ET.Element("tv")
@@ -259,6 +292,8 @@ def build(
     *,
     keep_ids: set[str] | None = None,
     unique_titles: bool = False,
+    logos: dict | None = None,
+    tz_offset: str = "",
 ) -> EpgResult:
     """Parse XMLTV ``raw_xml`` and optionally filter it to ``keep_ids``.
 
@@ -288,6 +323,8 @@ def build(
                 if dn.text:
                     name_to_id.setdefault(norm_name(dn.text), cid)
                     id_to_name.setdefault(cid, dn.text.strip())
+            if logos:
+                _set_icon(child, logos.get(cid, ""))
         elif child.tag == "programme":
             cid = child.get("channel", "")
             if keep_ids is not None and cid not in keep_ids:
@@ -296,6 +333,8 @@ def build(
             programme_count += 1
             if unique_titles:
                 _disambiguate(child, seq)
+            if tz_offset:
+                _apply_tz(child, tz_offset)
 
     root.set("generator-info-name", "Tunaar")
     xml = b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(

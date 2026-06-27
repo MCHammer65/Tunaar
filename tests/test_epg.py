@@ -154,6 +154,31 @@ def test_align_skips_unmatched_and_applies_unique_titles():
     assert nums == ["S2026E178"]  # date-based episode-num injected post-align
 
 
+def test_build_embeds_logos_and_stamps_tz():
+    import xml.etree.ElementTree as ET
+    doc = (
+        b'<tv><channel id="c1"><display-name>One</display-name></channel>'
+        b'<programme start="20260627060000" stop="20260627070000 +0000" channel="c1">'
+        b'<title>Show</title></programme></tv>'
+    )
+    out = epg.build(doc, logos={"c1": "http://logo/c1.png"}, tz_offset="+0100").xml
+    root = ET.fromstring(out)
+    # Logo injected as <icon>.
+    assert root.find("channel/icon").get("src") == "http://logo/c1.png"
+    prog = root.find("programme")
+    # Bare start gets the offset; the already-offset stop is left untouched.
+    assert prog.get("start") == "20260627060000 +0100"
+    assert prog.get("stop") == "20260627070000 +0000"
+
+
+def test_align_embeds_logos_by_number():
+    import xml.etree.ElementTree as ET
+    doc = b'<tv><channel id="keep"><display-name>K</display-name></channel></tv>'
+    out = epg.align(doc, {"5": "keep"}, logos={"5": "http://logo/5.png"}).xml
+    root = ET.fromstring(out)
+    assert root.find("channel/icon").get("src") == "http://logo/5.png"
+
+
 def test_norm_name():
     assert epg.norm_name("BBC One HD") == epg.norm_name("BBC ONE")
     assert epg.norm_name("Channel 4 (1080p)") == "channel4"

@@ -52,6 +52,9 @@ DEFAULTS: dict = {
     # each channel's id is its lineup number, matching the tuner's GuideNumber.
     # Kills the "0 channels matched" headache. Opt-in.
     "epg_align_ids": False,
+    # EPG hygiene: stamp this timezone offset (e.g. "+0000", "+0100") onto
+    # programme times that lack one, so players don't drift. Empty = leave as-is.
+    "epg_tz_offset": "",
     "ffmpeg_path": "ffmpeg",
     "discovery": True,  # answer HDHomeRun discovery so Plex auto-finds the tuner
     "discovery_port": 65001,
@@ -126,6 +129,7 @@ class Config:
     filter_epg_to_lineup: bool = DEFAULTS["filter_epg_to_lineup"]
     epg_unique_titles: bool = DEFAULTS["epg_unique_titles"]
     epg_align_ids: bool = DEFAULTS["epg_align_ids"]
+    epg_tz_offset: str = DEFAULTS["epg_tz_offset"]
     ffmpeg_path: str = DEFAULTS["ffmpeg_path"]
     discovery: bool = DEFAULTS["discovery"]
     discovery_port: int = DEFAULTS["discovery_port"]

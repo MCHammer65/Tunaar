@@ -276,6 +276,7 @@ class EpgCache:
 
                 lineup_ids = {c.tvg_id for c in chans if c.tvg_id}
                 uniq = self._config.epg_unique_titles and not locked
+                tz = self._config.epg_tz_offset
                 if self._config.epg_align_ids and not locked:
                     # Re-key the guide to lineup numbers so every player matches
                     # by channel number — no "0 channels matched".
@@ -284,13 +285,18 @@ class EpgCache:
                         for c in chans
                         if c.tvg_id and c.tvg_id in full.channel_ids
                     }
-                    self._result = epg.align(full.xml, number_to_id, unique_titles=uniq)
+                    logos = {c.number: c.logo for c in chans if c.logo}
+                    self._result = epg.align(full.xml, number_to_id, unique_titles=uniq,
+                                             logos=logos, tz_offset=tz)
                     self._matched = len(number_to_id)
                 else:
+                    logos = {c.tvg_id: c.logo for c in chans if c.tvg_id and c.logo}
                     if self._config.filter_epg_to_lineup:
-                        self._result = epg.build(full.xml, keep_ids=lineup_ids, unique_titles=uniq)
-                    elif uniq:
-                        self._result = epg.build(full.xml, unique_titles=True)
+                        self._result = epg.build(full.xml, keep_ids=lineup_ids,
+                                                 unique_titles=uniq, logos=logos, tz_offset=tz)
+                    elif uniq or logos or tz:
+                        self._result = epg.build(full.xml, unique_titles=uniq,
+                                                 logos=logos, tz_offset=tz)
                     else:
                         self._result = full
                     self._matched = len(lineup_ids & full.channel_ids)
@@ -790,6 +796,7 @@ def create_app(config: Config | None = None) -> Flask:
                 "epg_auto": config.epg_auto,
                 "epg_unique_titles": config.epg_unique_titles,
                 "epg_align_ids": config.epg_align_ids,
+                "epg_tz_offset": config.epg_tz_offset,
                 "discovered_epg": channels.discovered_epg,
                 "groups_include": config.groups_include,
                 "groups_exclude": config.groups_exclude,
@@ -959,6 +966,8 @@ def create_app(config: Config | None = None) -> Flask:
             config.epg_unique_titles = bool(body["epg_unique_titles"])
         if "epg_align_ids" in body:
             config.epg_align_ids = bool(body["epg_align_ids"])
+        if "epg_tz_offset" in body:
+            config.epg_tz_offset = str(body["epg_tz_offset"]).strip()
         if "epg_urls" in body and isinstance(body["epg_urls"], list):
             # Be forgiving: a user may paste several URLs on one line (separated
             # by spaces/commas) instead of one per line. Split them apart and
