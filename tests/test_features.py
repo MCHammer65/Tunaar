@@ -92,6 +92,27 @@ def test_epg_urls_split_when_pasted_on_one_line(client, app):
     assert app.config["TUNAAR"].epg_urls == ["http://a/guide.xml", "http://b/guide.xml"]
 
 
+def test_status_reports_failed_sources(tmp_path, monkeypatch):
+    good = "#EXTM3U\n#EXTINF:-1,Good\nhttp://x/good\n"
+
+    def fake_fetch(url, **k):
+        if "bad" in url:
+            raise RuntimeError("404")
+        return good
+
+    monkeypatch.setattr(m3u, "_fetch_text", fake_fetch)
+    cfg = Config(
+        device_id="FAIL1",
+        sources=[{"url": "http://ok/l.m3u"}, {"url": "http://bad/l.m3u"}],
+        stream_mode="redirect",
+        path=str(tmp_path / "config.json"),
+    )
+    client = create_app(cfg).test_client()
+    status = client.get("/api/status").get_json()
+    assert status["playlist_failed"] == ["http://bad/l.m3u"]
+    assert status["channels"] == 1  # good source still loaded
+
+
 def test_manual_epg_mapping_overrides_match(tmp_path, monkeypatch):
     # An OTA-style channel with no tvg-id and a name the guide won't match.
     playlist = '#EXTM3U\n#EXTINF:-1,BBC One South\nhttp://x/bbc\n'
