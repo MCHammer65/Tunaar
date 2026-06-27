@@ -111,6 +111,47 @@ def test_security_headers(client):
     assert h.get("Referrer-Policy") == "no-referrer"
 
 
+def test_optional_password_protects_management_only(tmp_path):
+    import base64
+    cfg = Config(
+        friendly_name="Sec", device_id="SEC1", playlist="dummy.m3u",
+        stream_mode="redirect", admin_password="s3cret",
+        path=str(tmp_path / "config.json"),
+    )
+    app = create_app(cfg)
+    app.config["CHANNELS"]._channels = SAMPLE
+    app.config["CHANNELS"]._fetched_at = float("inf")
+    c = app.test_client()
+
+    # Player + health endpoints stay open (no creds).
+    assert c.get("/discover.json").status_code == 200
+    assert c.get("/lineup.json").status_code == 200
+    assert c.get("/healthz").status_code == 200
+    # Management surface requires the password.
+    assert c.get("/api/status").status_code == 401
+    assert c.get("/").status_code == 401
+    ok = base64.b64encode(b"admin:s3cret").decode()
+    assert c.get("/api/status", headers={"Authorization": f"Basic {ok}"}).status_code == 200
+    bad = base64.b64encode(b"admin:wrong").decode()
+    assert c.get("/api/status", headers={"Authorization": f"Basic {bad}"}).status_code == 401
+
+
+def test_csrf_blocks_cross_origin_mutation(client):
+    # Same-host (or absent) Origin is fine; a foreign Origin is refused.
+    assert client.post("/api/refresh").status_code == 200
+    ok = client.post("/api/refresh", headers={"Origin": "http://localhost"})
+    assert ok.status_code == 200
+    bad = client.post("/api/refresh", headers={"Origin": "http://evil.example"})
+    assert bad.status_code == 403
+
+
+def test_admin_password_not_exposed(tmp_path):
+    cfg = Config(admin_password="hunter2", path=str(tmp_path / "c.json"))
+    pub = cfg.public_dict()
+    assert "admin_password" not in pub
+    assert pub["admin_password_set"] is True
+
+
 def test_rate_limiter_unit():
     from tunaar.app import RateLimiter
     rl = RateLimiter(limit=2, window=10.0)

@@ -69,6 +69,10 @@ DEFAULTS: dict = {
     # TUNAAR_GITHUB_TOKEN (env only, never persisted) to file issues directly.
     "feedback_enabled": True,
     "feedback_repo": "MCHammer65/PlexIPTV",
+    # Optional dashboard/API password (set via TUNAAR_ADMIN_PASSWORD). Empty =
+    # open on the LAN (default). When set, the management UI/API require it; the
+    # HDHomeRun/EPG/stream endpoints stay open so players keep working.
+    "admin_password": "",
 }
 
 # Managed as structured lists via the dashboard, not via env vars.
@@ -141,6 +145,7 @@ class Config:
     buy_url: str = DEFAULTS["buy_url"]
     feedback_enabled: bool = DEFAULTS["feedback_enabled"]
     feedback_repo: str = DEFAULTS["feedback_repo"]
+    admin_password: str = DEFAULTS["admin_password"]
 
     path: str = field(default="config.json", repr=False, compare=False)
 
@@ -230,4 +235,7 @@ class Config:
     def public_dict(self) -> dict:
         """Config view safe to expose on the dashboard API."""
         data = {k: v for k, v in asdict(self).items() if k != "path"}
+        # Never expose the admin password; report only whether one is set.
+        data.pop("admin_password", None)
+        data["admin_password_set"] = bool(self.admin_password)
         return data

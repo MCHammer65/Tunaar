@@ -9,6 +9,7 @@ dashboard with a small JSON API.
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
@@ -431,6 +432,39 @@ def create_app(config: Config | None = None) -> Flask:
 
     # -- Security hardening (PLT-04) -------------------------------------
     api_limiter = RateLimiter(limit=240, window=60.0)
+
+    # Management surface that the optional password protects. Player-facing
+    # endpoints (HDHomeRun/EPG/stream), health, static, docs and PWA assets stay
+    # open so Plex/Emby/Jellyfin keep working without credentials.
+    def _is_protected(path: str) -> bool:
+        return path == "/" or path.startswith(("/console", "/about", "/api/"))
+
+    @app.before_request
+    def _auth():
+        pw = config.admin_password
+        if not pw or not _is_protected(request.path):
+            return None
+        auth = request.authorization
+        if auth is None or not hmac.compare_digest((auth.password or ""), pw):
+            return Response(
+                "Authentication required", 401,
+                {"WWW-Authenticate": 'Basic realm="Tunaar"'},
+            )
+        return None
+
+    @app.before_request
+    def _csrf():
+        # Block cross-site mutations: a browser sends Origin on fetch/XHR, so a
+        # mismatched Origin on a state-changing API call is a CSRF attempt.
+        # Missing Origin (curl, tests, native clients) is allowed.
+        if request.method in ("POST", "PUT", "DELETE") and request.path.startswith("/api/"):
+            origin = request.headers.get("Origin")
+            if origin:
+                from urllib.parse import urlparse
+                if urlparse(origin).netloc != request.host:
+                    return jsonify({"error": "csrf",
+                                    "message": "Cross-origin request refused."}), 403
+        return None
 
     @app.before_request
     def _rate_limit():

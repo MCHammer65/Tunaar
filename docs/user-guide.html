@@ -122,6 +122,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
     <a href="#streaming">Stream modes</a>
     <a href="#updating">Updating</a>
     <a href="#license">Licensing</a>
+    <a href="#security">Security</a>
     <a href="#trouble">Troubleshooting</a>
     <a href="#faq">FAQ</a>
   </aside>
@@ -346,6 +347,15 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
       <li><h3>Paste your key</h3><p>Enter the key from your purchase email and click <span class="tag">Activate</span>. The badge switches to <b>Licensed</b> — that's it.</p></li>
     </ol>
     <div class="note">Each license can be activated on up to <b>2 devices</b>. Activating uses one of those slots; if you hit the limit, remove a device from your Lemon Squeezy account (or contact support) to free a slot. Annual keys expire on their date; lifetime keys never do.</div>
+
+    <h2 id="security">Securing the dashboard (optional)</h2>
+    <p>Tunaar is open on your LAN by default for zero-friction setup. If the dashboard could be reached
+       from outside your network, set a password with the <code>TUNAAR_ADMIN_PASSWORD</code> environment
+       variable. The dashboard and management API then require it (your browser prompts once), while the
+       tuner, guide and stream endpoints stay open so Plex/Emby/Jellyfin keep working without credentials.</p>
+    <div class="note">Tunaar also sends security headers, rate-limits the management API, refuses cross-origin
+      state changes, and guards outbound fetches against cloud-metadata SSRF (while still allowing your LAN
+      HDHomeRun).</div>
 
     <h2 id="trouble">Troubleshooting</h2>
     <table>
