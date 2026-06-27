@@ -1,0 +1,39 @@
+# Copyright (C) 2026 Muneris Management Ltd
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tunaar"
+description = "Single-container IPTV & HDHomeRun bridge for Plex, Emby and Jellyfin (HDHomeRun emulation, XMLTV EPG, ffmpeg remux)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Muneris Management Ltd", email = "info@muneris.co.uk" }]
+maintainers = [{ name = "Muneris Management Ltd", email = "info@muneris.co.uk" }]
+keywords = ["iptv", "plex", "hdhomerun", "xmltv", "epg", "m3u", "dvr"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Framework :: Flask",
+    "Topic :: Multimedia :: Video",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version", "dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/MCHammer65/Tunaar"
+Source = "https://github.com/MCHammer65/Tunaar"
+Issues = "https://github.com/MCHammer65/Tunaar/issues"
+
+[tool.setuptools]
+packages = ["tunaar"]
+
+[tool.setuptools.dynamic]
+version = { attr = "tunaar.__version__" }
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.package-data]
+tunaar = ["templates/*.html", "static/*"]

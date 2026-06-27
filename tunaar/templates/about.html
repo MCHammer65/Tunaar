@@ -1,0 +1,81 @@
+{# Copyright (C) 2026 Muneris Management Ltd #}
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>About — {{ name }}</title>
+  <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script>
+    (function () {
+      var saved = localStorage.getItem('tunaar-theme');
+      if (!saved) saved = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+    })();
+  </script>
+</head>
+<body>
+  <header>
+    <img src="{{ url_for('static', filename='logo.svg') }}" alt="{{ name }} logo">
+    <div>
+      <div class="title"><span>{{ name }}</span><span class="ver">v{{ version }}</span></div>
+      <div style="color:var(--muted);font-size:13px">About &amp; licensing</div>
+    </div>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/console">Console</a>
+      <a href="/about" class="active">About</a>
+      <a href="/docs/user-guide.html" target="_blank" rel="noopener">Guide ↗</a>
+    </nav>
+  </header>
+
+  <main style="max-width:760px">
+    <div class="panel">
+      <h3>{{ name }} v{{ version }}</h3>
+      <p class="hint">A single-container bridge that makes IPTV playlists and a real HDHomeRun appear in
+        Plex (and Emby / Jellyfin) as one Live-TV tuner, with a unified XMLTV guide.</p>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <h3>Licensing</h3>
+      <p class="hint" style="font-size:13.5px">
+        © 2026 <b>Muneris Management Ltd</b> — a company registered in England and Wales
+        (<a href="https://find-and-update.company-information.service.gov.uk/company/09096411"
+            target="_blank" rel="noopener">no. 09096411</a>).
+      </p>
+      <p class="hint" style="font-size:13.5px">
+        {{ name }} is free software licensed under the
+        <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">GNU Affero
+        General Public License v3.0 or later</a>. You may use, modify and self-host it; if you run a
+        modified version as a network service you must make your source changes available under the same
+        license. The complete source is at
+        <a href="https://github.com/MCHammer65/Tunaar" target="_blank" rel="noopener">github.com/MCHammer65/Tunaar</a>.
+      </p>
+      <p class="hint" style="font-size:13.5px">
+        <b>Commercial licensing.</b> A separate commercial license is available for uses that can't meet
+        the AGPL terms — contact
+        <a href="mailto:info@muneris.co.uk">info@muneris.co.uk</a>.
+      </p>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <h3>Resources</h3>
+      <div class="endpoints" style="font-size:14px">
+        <a href="/docs/install.html" target="_blank" rel="noopener">Install guide</a>
+        <a href="/docs/user-guide.html" target="_blank" rel="noopener">User guide</a>
+        <a href="https://github.com/MCHammer65/Tunaar" target="_blank" rel="noopener">Source code</a>
+        <a href="https://github.com/MCHammer65/Tunaar/issues" target="_blank" rel="noopener">Report an issue</a>
+      </div>
+    </div>
+
+    <p class="hint" style="margin-top:16px;font-size:12px">
+      {{ name }} is a neutral tuner bridge — it provides no channels itself. Provider presets point at
+      third-party community lists, which are the responsibility of their respective operators.
+    </p>
+  </main>
+
+  <footer>{{ name }} v{{ version }} · © 2026 Muneris Management Ltd · AGPL-3.0-or-later</footer>
+</body>
+</html>

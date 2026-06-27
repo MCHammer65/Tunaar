@@ -345,6 +345,15 @@ def test_bulk_stream_health_check(client, monkeypatch):
     assert [f["name"] for f in r["failed"]] == ["ESPN"]
 
 
+def test_about_page(client):
+    r = client.get("/about")
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert "Muneris Management Ltd" in body
+    assert "AGPL" in body
+    assert "info@muneris.co.uk" in body
+
+
 def test_docs_served_and_traversal_blocked(client):
     assert client.get("/docs/user-guide.html").status_code == 200
     assert client.get("/docs/install.html").status_code == 200
