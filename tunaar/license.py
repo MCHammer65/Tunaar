@@ -21,7 +21,13 @@ LS_ACTIVATE_URL = "https://api.lemonsqueezy.com/v1/licenses/activate"
 NET_GRACE_DAYS = 14  # keep a known-good license if Lemon Squeezy is unreachable
 
 TRIAL_DAYS = 30
+RENEWAL_GRACE_DAYS = 14  # an expired annual key keeps full features during renewal
 DAY = 86400
+
+# Basic tier (what keeps working once entitlement lapses and enforcement is on).
+# The bridge still runs, but capped — premium reliability features are off.
+BASIC_MAX_SOURCES = 1
+BASIC_MAX_CHANNELS = 100
 
 
 def _parse_expiry(value: str | None) -> float | None:
@@ -90,23 +96,28 @@ def activate_ls(license_key: str, instance_name: str, *, timeout: int = 10) -> d
 
 
 def trial_state(trial_start: float, now: float) -> dict:
-    """The (offline) trial/expired state when there's no valid license."""
+    """The (offline) trial/expired state when there's no valid license.
+
+    ``premium`` reflects raw entitlement (True only while the trial is live);
+    enforcement (whether a lapse actually locks features) is applied later in
+    :func:`evaluate`.
+    """
     trial_end = (trial_start or now) + TRIAL_DAYS * DAY
     if now < trial_end:
         return {"state": "trial", "plan": "trial", "email": "",
-                "days_left": max(0, int((trial_end - now) / DAY)), "premium": True}
-    return {"state": "expired", "plan": "expired", "email": "",
-            "days_left": 0, "premium": False}
+                "days_left": max(0, int((trial_end - now) / DAY)),
+                "premium": True, "nag": False, "expires_at": trial_end}
+    return {"state": "expired", "plan": "trial", "email": "",
+            "days_left": 0, "premium": False, "nag": True, "expires_at": trial_end}
 
 
-def evaluate(ls_result: dict | None, trial_start: float, now: float | None = None) -> dict:
-    """Compute the current license state from a (cached) Lemon Squeezy result.
+def _entitlement(ls_result: dict | None, trial_start: float, now: float) -> dict:
+    """Raw license/trial entitlement, before enforcement is applied.
 
-    ``ls_result`` is the dict from :func:`validate_ls` (or None when there's no
-    key). A valid result yields a ``licensed`` state; otherwise we fall back to
-    the offline trial window.
+    Order: a valid Lemon Squeezy key → ``licensed``; a key that merely *expired*
+    → a 14-day ``grace`` window (full features, prompts to renew) then
+    ``expired``; otherwise fall back to the offline trial window.
     """
-    now = time.time() if now is None else now
     if ls_result and ls_result.get("valid"):
         exp = ls_result.get("expires_at")
         return {
@@ -114,6 +125,41 @@ def evaluate(ls_result: dict | None, trial_start: float, now: float | None = Non
             "plan": ls_result.get("plan", "licensed"),
             "email": ls_result.get("email", ""),
             "days_left": None if exp is None else max(0, int((exp - now) / DAY)),
-            "premium": True,
+            "premium": True, "nag": False, "expires_at": exp,
         }
+    if ls_result and ls_result.get("expires_at"):
+        exp = ls_result["expires_at"]
+        if now < exp + RENEWAL_GRACE_DAYS * DAY:
+            return {
+                "state": "grace",
+                "plan": "annual",
+                "email": ls_result.get("email", ""),
+                "days_left": max(0, int((exp + RENEWAL_GRACE_DAYS * DAY - now) / DAY)),
+                "premium": True, "nag": True, "expires_at": exp,
+            }
+        return {"state": "expired", "plan": "expired",
+                "email": ls_result.get("email", ""),
+                "days_left": 0, "premium": False, "nag": True, "expires_at": exp}
     return trial_state(trial_start, now)
+
+
+def evaluate(
+    ls_result: dict | None,
+    trial_start: float,
+    now: float | None = None,
+    *,
+    enforce: str = "nag",
+) -> dict:
+    """Compute the current license state from a (cached) Lemon Squeezy result.
+
+    ``ls_result`` is the dict from :func:`validate_ls` (or None when there's no
+    key). ``premium`` is the raw entitlement; ``basic_locked`` is True only when
+    entitlement has lapsed **and** ``enforce == "premium"`` — that's when the app
+    drops to the capped basic tier. In the default ``"nag"`` mode features stay
+    on and only a prompt is shown.
+    """
+    now = time.time() if now is None else now
+    state = _entitlement(ls_result, trial_start, now)
+    state["enforce"] = enforce
+    state["basic_locked"] = (not state["premium"]) and (enforce == "premium")
+    return state
