@@ -74,6 +74,31 @@ def test_load_hdhr_lineup(monkeypatch):
     assert chans[0].attrs["tvg-chno"] == "2.1"
 
 
+def test_load_hdhr_clean_filters_junk(monkeypatch):
+    lineup = [
+        {"GuideNumber": "1", "GuideName": "BBC ONE", "VideoCodec": "MPEG2",
+         "AudioCodec": "MPEG", "URL": "http://hd/v1"},
+        {"GuideNumber": "670", "GuideName": "ADULT Section", "URL": "http://hd/v670"},
+        {"GuideNumber": "16", "GuideName": "QVC", "VideoCodec": "MPEG2",
+         "AudioCodec": "MPEG", "URL": "http://hd/v16"},
+        {"GuideNumber": "29", "GuideName": "ITV2+1", "VideoCodec": "MPEG2",
+         "AudioCodec": "MPEG", "URL": "http://hd/v29"},
+        {"GuideNumber": "700", "GuideName": "BBC Radio 1", "AudioCodec": "MPEG",
+         "URL": "http://hd/v700"},  # radio: audio only, no VideoCodec
+    ]
+
+    class Resp:
+        def json(self): return lineup
+        def raise_for_status(self): pass
+
+    monkeypatch.setattr(m3u.requests, "get", lambda *a, **k: Resp())
+    # Without clean: everything comes through.
+    assert len(m3u.load_hdhr("http://x")) == 5
+    # With clean: only the real TV channel survives.
+    clean = m3u.load_hdhr("http://x", clean=True)
+    assert [c.name for c in clean] == ["BBC ONE"]
+
+
 def test_load_sources_handles_hdhr_type(monkeypatch):
     class Resp:
         def json(self): return [{"GuideNumber": "1", "GuideName": "BBC", "URL": "http://hd/1"}]

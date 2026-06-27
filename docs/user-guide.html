@@ -193,6 +193,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
     <ol class="steps">
       <li><h3>Find the device URL</h3><p>In a browser, confirm <code>http://&lt;hdhr-ip&gt;/lineup.json</code> loads. Use <code>http://&lt;hdhr-ip&gt;</code> as the source URL.</p></li>
       <li><h3>Add it</h3><p>Settings → Sources, type <span class="tag">HDHomeRun</span>, paste the address. Its channels appear in the lineup (default group "Freeview", keeping their channel numbers).</p></li>
+      <li><h3>Clean it up (optional)</h3><p>Freeview tuners report a lot of non-TV entries — radio stations, shopping, adult and <code>+1</code> timeshifts. Tick <b>Clean lineup</b> when adding the HDHomeRun and Tunaar skips those, leaving a tidy TV-only set.</p></li>
       <li><h3>Get them a guide</h3><p>OTA channels have no guide ID, so Tunaar <b>matches them by name</b> to your XMLTV. Add a guide for your region (<a href="#guide">below</a>) and watch the EPG match count rise.</p></li>
     </ol>
     <div class="note">Don't also add the HDHomeRun directly in Plex — let Tunaar front it, or you're back to Plex's "can't mix guide types" limitation.</div>
