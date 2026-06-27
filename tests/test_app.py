@@ -91,6 +91,23 @@ def test_healthz(client):
     assert client.get("/healthz").get_json()["status"] == "ok"
 
 
+def test_security_headers(client):
+    h = client.get("/healthz").headers
+    assert h.get("X-Content-Type-Options") == "nosniff"
+    assert h.get("X-Frame-Options") == "SAMEORIGIN"
+    assert h.get("Referrer-Policy") == "no-referrer"
+
+
+def test_rate_limiter_unit():
+    from tunaar.app import RateLimiter
+    rl = RateLimiter(limit=2, window=10.0)
+    assert rl.allow("ip", now=0.0) is True
+    assert rl.allow("ip", now=1.0) is True
+    assert rl.allow("ip", now=2.0) is False       # 3rd in window → blocked
+    assert rl.allow("ip", now=12.0) is True        # window rolled over
+    assert rl.allow("other", now=2.0) is True      # separate key unaffected
+
+
 def test_readyz(client):
     # Channels are pinned in the fixture, so the app reports ready.
     r = client.get("/readyz")

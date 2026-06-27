@@ -55,6 +55,28 @@ def _base_url(config: Config) -> str:
     return request.host_url.rstrip("/")
 
 
+class RateLimiter:
+    """Simple per-key sliding-window limiter for the management API."""
+
+    def __init__(self, limit: int, window: float) -> None:
+        self.limit = limit
+        self.window = window
+        self._hits: dict = {}
+        self._lock = threading.Lock()
+
+    def allow(self, key: str, now: float | None = None) -> bool:
+        now = time.time() if now is None else now
+        cutoff = now - self.window
+        with self._lock:
+            q = self._hits.setdefault(key, [])
+            while q and q[0] < cutoff:
+                q.pop(0)
+            if len(q) >= self.limit:
+                return False
+            q.append(now)
+            return True
+
+
 class ChannelCache:
     """Thread-safe cache of the merged, group-filtered playlist."""
 
@@ -382,6 +404,26 @@ def create_app(config: Config | None = None) -> Flask:
     app.config.update(
         TUNAAR=config, CHANNELS=channels, EPG=guide, TUNERS=tuners, LOGBUS=bus
     )
+
+    # -- Security hardening (PLT-04) -------------------------------------
+    api_limiter = RateLimiter(limit=240, window=60.0)
+
+    @app.before_request
+    def _rate_limit():
+        # Throttle only mutating management calls; streaming and polling are free.
+        if request.method in ("POST", "PUT", "DELETE") and request.path.startswith("/api/"):
+            if not api_limiter.allow(request.remote_addr or "?"):
+                return jsonify({"error": "rate_limited",
+                                "message": "Too many requests — slow down."}), 429
+        return None
+
+    @app.after_request
+    def _security_headers(resp: Response) -> Response:
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        return resp
 
     # -- HDHomeRun emulation ---------------------------------------------
 
