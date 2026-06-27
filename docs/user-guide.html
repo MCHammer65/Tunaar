@@ -220,7 +220,10 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
     <div class="note">It's off by default because it changes how titles read in Plex. Tunaar uses the
       <code>sub-title</code> when present, and falls back to the first sentence of the
       <code>desc</code> when there isn't one — so even feeds that put the matchup only in the description
-      get disambiguated. A programme with no sub-title and no description can't be split.</div>
+      get disambiguated. <b>Episodic content is left alone:</b> anything with a season/episode
+      (<code>episode-num</code>) tag is skipped, since Plex already separates those — so only sports,
+      news and other generic-title airings are touched. A programme with no sub-title and no description
+      can't be split.</div>
 
     <h2 id="mapping">Manual EPG mapping</h2>
     <p>Some channels won't match the guide automatically — most often <b>regional Freeview</b> from a real
