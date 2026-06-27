@@ -55,7 +55,13 @@ from dataclasses import asdict, dataclass
 import requests
 
 KINDS = ("feature", "bug", "other")
-DEFAULT_LABELS = {"feature": ["feature"], "bug": ["bug"], "other": ["feedback"]}
+# Labels include `needs-triage` so captured items land in the Autopilot triage
+# queue (see .github/AUTOPILOT.md).
+DEFAULT_LABELS = {
+    "feature": ["feature", "needs-triage"],
+    "bug": ["bug", "needs-triage"],
+    "other": ["feedback", "needs-triage"],
+}
 
 
 def _norm_kind(kind: str) -> str:

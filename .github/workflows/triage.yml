@@ -1,0 +1,20 @@
+name: Triage
+
+# Acknowledge new feature/bug/feedback issues so submitters know the flow.
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  acknowledge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment on new issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body \
+          "Thanks! This is in the triage queue. The maintainer reviews periodically and will mark it **approved**, **declined**, or **changes-requested** before any work begins. Approved items are picked up automatically."

@@ -1,0 +1,29 @@
+# Autopilot triage labels. Sync to the repo via the "Sync labels" workflow
+# (Actions → Sync labels → Run workflow). Portable across products.
+- name: feature
+  color: "1f6feb"
+  description: New capability or improvement
+- name: bug
+  color: "d73a4a"
+  description: Something isn't working
+- name: feedback
+  color: "8957e5"
+  description: General feedback from a user / the in-app widget
+- name: needs-triage
+  color: "fbca04"
+  description: Awaiting owner review
+- name: approved
+  color: "0e8a16"
+  description: Approved to build — triggers the build agent
+- name: declined
+  color: "6e7681"
+  description: Will not be actioned (issue auto-closed)
+- name: changes-requested
+  color: "d4c5f9"
+  description: Needs more detail / a different approach before approval
+- name: building
+  color: "0052cc"
+  description: An agent is implementing this
+- name: auto-fix
+  color: "c2e0c6"
+  description: Eligible for automated fix (self-healing pipeline)

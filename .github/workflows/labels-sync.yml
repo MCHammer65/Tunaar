@@ -1,0 +1,40 @@
+name: Sync labels
+
+# Create/update the Autopilot triage labels from .github/labels.yml.
+# Run manually after first import into a new product (Actions → Run workflow).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create/update labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' > labels.tsv
+          import re, pathlib
+          name = color = desc = None
+          out = []
+          for line in pathlib.Path(".github/labels.yml").read_text().splitlines():
+              line = line.rstrip()
+              if line.lstrip().startswith("- name:"):
+                  if name: out.append((name, color, desc))
+                  name = line.split(":", 1)[1].strip().strip('"'); color = ""; desc = ""
+              elif line.lstrip().startswith("color:"):
+                  color = line.split(":", 1)[1].strip().strip('"')
+              elif line.lstrip().startswith("description:"):
+                  desc = line.split(":", 1)[1].strip().strip('"')
+          if name: out.append((name, color, desc))
+          for n, c, d in out:
+              print(f"{n}\t{c}\t{d}")
+          PY
+          while IFS=$'\t' read -r name color desc; do
+            gh label create "$name" --color "$color" --description "$desc" --force
+          done < labels.tsv

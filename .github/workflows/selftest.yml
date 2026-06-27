@@ -1,0 +1,40 @@
+name: Self-test
+
+# Nightly health check. If the suite breaks, file an auto-fix issue so the
+# self-healing pipeline (autofix.yml) picks it up.
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - name: Install
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run suite
+        run: pytest -q
+
+      - name: File auto-fix issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh issue list --repo "${{ github.repository }}" --state open \
+            --label auto-fix --search "Nightly self-test failing in:title" --json number --jq 'length')
+          if [ "$existing" = "0" ]; then
+            gh issue create --repo "${{ github.repository }}" \
+              --title "[auto] Nightly self-test failing ($(date -u +%Y-%m-%d))" \
+              --label "bug,auto-fix,needs-triage" \
+              --body "The nightly self-test failed. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi

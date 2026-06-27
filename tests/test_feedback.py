@@ -65,7 +65,7 @@ def test_github_api_used_when_token_set(tmp_path, monkeypatch):
     fb = hub.submit("feature", "Webhooks", now=3.0)
     assert fb.issue_url == "https://github.com/me/app/issues/42"
     assert created["url"].endswith("/repos/me/app/issues")
-    assert created["json"]["labels"] == ["feature"]
+    assert created["json"]["labels"] == ["feature", "needs-triage"]
     # Still stored locally as the source of truth.
     assert len(hub.list()) == 1
 

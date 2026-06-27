@@ -1,0 +1,45 @@
+name: Auto-fix
+
+# Self-healing: when an issue is labelled `auto-fix` (by the error reporter, the
+# nightly self-test, or you), an agent opens a fix PR. Bugs get a fix produced
+# automatically; you still review + merge — no auto-push to the default branch.
+#
+# SETUP: secret ANTHROPIC_API_KEY + Actions write/PR permissions (see AUTOPILOT.md).
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  fix:
+    if: github.event.label.name == 'auto-fix'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Propose a fix
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Diagnose and fix the bug in issue #${{ github.event.issue.number }}
+            ("${{ github.event.issue.title }}").
+
+            Rules:
+            - Open a pull request on a new branch; do NOT push to the default branch.
+            - Make the smallest change that fixes the root cause.
+            - Add a regression test that fails before and passes after the fix.
+            - Ensure the full test suite and linter pass.
+            - PR body must include "Closes #${{ github.event.issue.number }}".
+            - If you cannot reproduce or the cause is unclear, comment your findings
+              on the issue instead of guessing.
+      - name: Note if the agent could not run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" \
+            --body "Auto-fix couldn't complete (check the run / that ANTHROPIC_API_KEY is set). Left for manual follow-up." || true

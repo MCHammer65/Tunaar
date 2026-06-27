@@ -1,0 +1,74 @@
+name: Feature queue
+
+# Approve-before-build gate. When the maintainer adds the `approved` label to an
+# issue, an agent implements it as a PR (never a direct push to the default
+# branch — you still review + merge). `declined` auto-closes.
+#
+# SETUP (per product):
+#   1. Add repo secret ANTHROPIC_API_KEY (or CLAUDE_CODE_OAUTH_TOKEN).
+#   2. Settings → Actions → General → Workflow permissions → Read and write +
+#      "Allow GitHub Actions to create and approve pull requests".
+#   3. Run "Sync labels" once.
+# Only users with write access can apply labels, so only you can trigger a build.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  declined:
+    if: github.event.label.name == 'declined'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close as declined
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue close "${{ github.event.issue.number }}" --repo "${{ github.repository }}" \
+            --comment "Declined for now — thanks for the suggestion. Reopen if circumstances change." || true
+
+  build:
+    if: github.event.label.name == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mark as building
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" --repo "${{ github.repository }}" \
+            --add-label building --remove-label approved || true
+
+      # Implements the approved issue and opens a PR that closes it.
+      # NOTE: verify the action inputs against its README for your pinned version.
+      - name: Implement approved request
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Implement the change described in issue #${{ github.event.issue.number }}
+            ("${{ github.event.issue.title }}").
+
+            Rules:
+            - Open a pull request on a new branch; do NOT push to the default branch.
+            - Keep the change minimal and focused on the issue.
+            - Add or update tests and make sure the existing test suite + linter pass.
+            - In the PR body, write "Closes #${{ github.event.issue.number }}".
+            - If the request is ambiguous or too large for one PR, comment on the
+              issue with questions instead of guessing.
+
+      - name: Note if the agent could not run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" --repo "${{ github.repository }}" \
+            --add-label changes-requested --remove-label building || true
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" \
+            --body "The build agent couldn't complete this automatically (check the workflow logs / that ANTHROPIC_API_KEY is set). Left it for manual follow-up." || true

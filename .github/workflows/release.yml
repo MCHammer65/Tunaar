@@ -1,0 +1,58 @@
+name: Release
+
+# Tag a release: `git tag v0.1.0 && git push --tags`. This drafts the GitHub
+# Release from CHANGELOG.md and uploads ready-to-post community announcements
+# (Reddit / HN / X / Mastodon / Discord) as artifacts for you to review + post.
+# Owned channels (Discord/Mastodon) auto-post when their secrets are set; forums
+# stay drafts.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Determine version
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate announcements + release notes
+        env:
+          ANNOUNCE_DISCORD_WEBHOOK: ${{ secrets.ANNOUNCE_DISCORD_WEBHOOK }}
+          ANNOUNCE_MASTODON_INSTANCE: ${{ secrets.ANNOUNCE_MASTODON_INSTANCE }}
+          ANNOUNCE_MASTODON_TOKEN: ${{ secrets.ANNOUNCE_MASTODON_TOKEN }}
+        run: |
+          python scripts/gen_announcements.py \
+            --version "${{ steps.ver.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --outdir dist/announcements
+
+      - name: Upload announcement drafts
+        uses: actions/upload-artifact@v4
+        with:
+          name: announcements-${{ steps.ver.outputs.version }}
+          path: dist/announcements/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Tunaar ${{ steps.ver.outputs.version }}" \
+            --notes-file dist/announcements/release-notes.md \
+            dist/announcements/reddit.md \
+            dist/announcements/hackernews.txt \
+            dist/announcements/twitter.txt \
+            dist/announcements/mastodon.txt \
+            dist/announcements/discord.txt

@@ -1,19 +1,27 @@
-name: ✨ Feature request
-description: Suggest a feature or improvement (also reachable from the in-app Feedback button)
-labels: ["feature"]
+name: 💡 Feature request
+description: Suggest an idea or improvement
+labels: ["feature", "needs-triage"]
 body:
-  - type: textarea
-    id: summary
+  - type: markdown
     attributes:
-      label: What would you like?
-      description: A clear description of the feature and the problem it solves.
-      placeholder: "I'd like Tunaar to…"
+      value: |
+        Thanks for the idea! It goes into the triage queue for review before any
+        work starts — you'll see a label change when it's approved, declined or
+        needs more detail.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: The use case or frustration, not just the solution.
     validations:
       required: true
   - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution (optional)
+      description: How you imagine it working.
+  - type: input
     id: context
     attributes:
-      label: Anything else?
-      description: Your setup (player, NAS), examples, or links that help.
-    validations:
-      required: false
+      label: Player / device / server (if relevant)
+      placeholder: e.g. TiviMate on Fire Stick, or Jellyfin
