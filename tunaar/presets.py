@@ -11,15 +11,9 @@ These are third-party community lists; paths can change over time. The index
 pages at https://i.mjh.nz/ list every region's current links.
 """
 
+# NOTE: Samsung TV Plus — UK was removed because mjh.nz no longer serves
+# SamsungTVPlus/gb.m3u8 (404). Re-add once a working UK URL is confirmed.
 PRESETS: list[dict] = [
-    {
-        "id": "samsung-gb",
-        "label": "Samsung TV Plus — UK",
-        "region": "GB",
-        "name": "Samsung TV Plus GB",
-        "url": "https://i.mjh.nz/SamsungTVPlus/gb.m3u8",
-        "group": "Samsung TV Plus",
-    },
     {
         "id": "pluto-gb",
         "label": "Pluto TV — UK",

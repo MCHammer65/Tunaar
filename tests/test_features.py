@@ -208,25 +208,25 @@ def test_name_based_epg_match_for_channel_without_tvgid(tmp_path, monkeypatch):
 def test_presets_listed_with_added_flag(client):
     presets = client.get("/api/presets").get_json()
     ids = {p["id"] for p in presets}
-    assert {"samsung-gb", "pluto-gb", "samsung-us", "pluto-us",
+    assert {"pluto-gb", "samsung-us", "pluto-us",
             "samsung-ca", "pluto-ca", "samsung-fr", "pluto-fr", "jamaica"} <= ids
     assert all(p["added"] is False for p in presets)  # none added yet
     assert {"GB", "US", "CA", "FR", "JM"} <= {p["region"] for p in presets}
 
 
 def test_add_preset_toggles_source(client):
-    r = client.post("/api/sources", json={"preset": "samsung-gb"})
+    r = client.post("/api/sources", json={"preset": "pluto-gb"})
     assert r.get_json()["added"] is True
     sources = r.get_json()["sources"]
-    assert sources[-1]["url"] == "https://i.mjh.nz/SamsungTVPlus/gb.m3u8"
-    assert sources[-1]["group"] == "Samsung TV Plus"
+    assert sources[-1]["url"] == "https://i.mjh.nz/PlutoTV/gb.m3u8"
+    assert sources[-1]["group"] == "Pluto TV"
     presets = {p["id"]: p for p in client.get("/api/presets").get_json()}
-    assert presets["samsung-gb"]["added"] is True
+    assert presets["pluto-gb"]["added"] is True
     # Clicking the same preset again removes it (toggle).
-    r2 = client.post("/api/sources", json={"preset": "samsung-gb"})
+    r2 = client.post("/api/sources", json={"preset": "pluto-gb"})
     assert r2.get_json()["added"] is False
     urls = [s["url"] for s in client.get("/api/config").get_json()["sources"]]
-    assert "https://i.mjh.nz/SamsungTVPlus/gb.m3u8" not in urls
+    assert "https://i.mjh.nz/PlutoTV/gb.m3u8" not in urls
 
 
 def test_add_unknown_preset_rejected(client):
@@ -309,7 +309,7 @@ def test_license_premium_mode_gates_extras(tmp_path, monkeypatch):
     client = create_app(cfg).test_client()
     assert client.get("/api/status").get_json()["license"]["state"] == "expired"
     # Premium extras → 402.
-    assert client.post("/api/sources", json={"preset": "samsung-gb"}).status_code == 402
+    assert client.post("/api/sources", json={"preset": "pluto-gb"}).status_code == 402
     assert client.post("/api/sources", json={"url": "http://h", "type": "hdhr"}).status_code == 402
     assert client.post("/api/epg/preset", json={"id": "epg-uk"}).status_code == 402
     assert client.post("/api/epg/map", json={"name": "CNN", "tvg_id": "x"}).status_code == 402

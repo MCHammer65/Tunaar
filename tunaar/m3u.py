@@ -192,7 +192,10 @@ def load_sources(
         # One bad/unreachable source must not abort the whole merge — skip it.
         try:
             if stype == "hdhr":
-                chans = load_hdhr(url, user_agent=user_agent, timeout=timeout)
+                chans = load_hdhr(
+                    url, user_agent=user_agent, timeout=timeout,
+                    clean=bool(src.get("clean")),
+                )
                 for ch in chans:
                     ch.source = name
                     ch.group = override or "Freeview"
@@ -220,12 +223,45 @@ def load_sources(
     return Playlist(channels=merged, epg_urls=unique_epg, failed=failed)
 
 
-def load_hdhr(url: str, *, user_agent: str = "Tunaar", timeout: int = 30) -> list[Channel]:
+# Keywords that mark a shopping channel (matched case-insensitively in the name).
+_SHOPPING_HINTS = (
+    "qvc", "ideal world", "gemporia", "gems tv", "tjc", "hochanda", "craft",
+    "hobbymaker", "jewell", "shop", "high street tv", "must have ideas", "ideal",
+)
+
+
+def _hdhr_skip(item: dict, clean: bool) -> bool:
+    """Whether a HDHomeRun lineup item should be dropped when ``clean`` is set."""
+    if not clean:
+        return False
+    name = (item.get("GuideName") or "").lower()
+    # Radio / audio-only: has an audio codec but no video codec.
+    if "AudioCodec" in item and "VideoCodec" not in item:
+        return True
+    if "adult" in name:
+        return True
+    if "+1" in name:  # timeshift duplicates
+        return True
+    if any(h in name for h in _SHOPPING_HINTS):
+        return True
+    return False
+
+
+def load_hdhr(
+    url: str,
+    *,
+    user_agent: str = "Tunaar",
+    timeout: int = 30,
+    clean: bool = False,
+) -> list[Channel]:
     """Read a real HDHomeRun device's ``lineup.json`` into channels.
 
     ``url`` may be the device base (``http://192.168.1.50``), its
     ``discover.json``, or its ``lineup.json``. HDHomeRun stream URLs are plain
     MPEG-TS, so Tunaar's normal proxy/ffmpeg path handles them unchanged.
+
+    When ``clean`` is set, radio/audio-only, adult, shopping and ``+1``
+    timeshift channels are skipped to keep the TV lineup tidy.
     """
     headers = {"User-Agent": user_agent}
     # (connect, read): fail fast if the device is unreachable so an offline/
@@ -243,6 +279,8 @@ def load_hdhr(url: str, *, user_agent: str = "Tunaar", timeout: int = 30) -> lis
     data = requests.get(lineup_url, timeout=to, headers=headers).json()
     channels: list[Channel] = []
     for item in data:
+        if _hdhr_skip(item, clean):
+            continue
         number = str(item.get("GuideNumber", "")).strip()
         channels.append(
             Channel(
