@@ -61,6 +61,11 @@ DEFAULTS: dict = {
     "trial_start": 0.0,  # unix timestamp of first run; seeds the 30-day trial
     "license_enforce": "nag",  # "nag" (banner only) | "premium" (gate extras)
     "buy_url": "",  # checkout link shown on the dashboard "Buy a license" button
+    # Autopilot · feedback / feature-request capture. A public repo enables a
+    # pre-filled "open an issue" link; the owner can additionally set
+    # TUNAAR_GITHUB_TOKEN (env only, never persisted) to file issues directly.
+    "feedback_enabled": True,
+    "feedback_repo": "MCHammer65/PlexIPTV",
 }
 
 # Managed as structured lists via the dashboard, not via env vars.
@@ -130,6 +135,8 @@ class Config:
     trial_start: float = DEFAULTS["trial_start"]
     license_enforce: str = DEFAULTS["license_enforce"]
     buy_url: str = DEFAULTS["buy_url"]
+    feedback_enabled: bool = DEFAULTS["feedback_enabled"]
+    feedback_repo: str = DEFAULTS["feedback_repo"]
 
     path: str = field(default="config.json", repr=False, compare=False)
 

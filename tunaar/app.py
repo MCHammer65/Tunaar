@@ -31,7 +31,7 @@ from flask import (
     stream_with_context,
 )
 
-from . import __version__, epg, license as licensing, m3u, presets, proxy
+from . import __version__, epg, feedback as feedback_mod, license as licensing, m3u, presets, proxy
 from .config import Config
 from .logbus import BusHandler, LogBus
 
@@ -350,6 +350,18 @@ def create_app(config: Config | None = None) -> Flask:
     channels = ChannelCache(config, is_locked=basic_locked)
     guide = EpgCache(config, channels, is_locked=basic_locked)
     tuners = proxy.TunerManager(config.tuner_count)
+
+    # Autopilot · feedback capture. The GitHub token is owner-only and read from
+    # the environment so it's never written to a customer's config file.
+    feedback_hub = feedback_mod.FeedbackHub(
+        app_name=config.friendly_name,
+        version=__version__,
+        store_path=os.path.join(
+            os.path.dirname(os.path.abspath(config.path)) or ".", "feedback.json"
+        ),
+        github_repo=config.feedback_repo,
+        github_token=os.environ.get("TUNAAR_GITHUB_TOKEN", ""),
+    )
 
     bus = LogBus()
     started_at = time.time()
@@ -987,6 +999,43 @@ def create_app(config: Config | None = None) -> Flask:
     def api_refresh() -> Response:
         _refresh()
         return jsonify({"ok": True})
+
+    # -- Autopilot · feedback / feature requests --------------------------
+
+    @app.get("/api/feedback")
+    def api_feedback_config() -> Response:
+        """Capability info for the in-app widget (and the local queue list)."""
+        return jsonify({
+            "enabled": config.feedback_enabled,
+            "repo": config.feedback_repo,
+            # auto = filed straight to GitHub; link = user opens a pre-filled
+            # issue; local = stored on-box only.
+            "mode": ("auto" if feedback_hub.github_enabled
+                     else "link" if feedback_hub.link_enabled else "local"),
+            "items": feedback_hub.list(),
+        })
+
+    @app.post("/api/feedback")
+    def api_feedback_submit() -> Response:
+        if not config.feedback_enabled:
+            return jsonify({"error": "disabled"}), 403
+        body = request.get_json(silent=True) or {}
+        try:
+            fb = feedback_hub.submit(
+                kind=str(body.get("kind", "feature")),
+                title=str(body.get("title", "")),
+                message=str(body.get("message", "")),
+                email=str(body.get("email", "")),
+            )
+        except ValueError as exc:
+            return jsonify({"error": "invalid", "message": str(exc)}), 400
+        # issue_url = filed automatically; submit_url = pre-filled link to open.
+        return jsonify({
+            "ok": True,
+            "id": fb.id,
+            "issue_url": fb.issue_url,
+            "submit_url": "" if fb.issue_url else feedback_hub.issue_url(fb),
+        })
 
     @app.get("/healthz")
     def healthz() -> Response:

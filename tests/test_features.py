@@ -193,6 +193,35 @@ def test_align_ids_toggle_persists(client):
     assert client.get("/api/config").get_json()["epg_align_ids"] is True
 
 
+def test_feedback_submit_and_list(tmp_path, monkeypatch):
+    monkeypatch.setattr(m3u, "_fetch_text", lambda src, **k: PLAYLIST)
+    cfg = Config(
+        device_id="FB1",
+        sources=[{"name": "Main", "url": "http://x/list.m3u"}],
+        feedback_repo="me/app",  # link mode (no token)
+        stream_mode="redirect",
+        path=str(tmp_path / "config.json"),
+    )
+    client = create_app(cfg).test_client()
+
+    cap = client.get("/api/feedback").get_json()
+    assert cap["enabled"] is True and cap["mode"] == "link"
+
+    r = client.post("/api/feedback", json={"kind": "feature", "title": "Add EPG cache"})
+    assert r.status_code == 200
+    out = r.get_json()
+    # No token → a pre-filled issue link is returned for the user to open.
+    assert out["issue_url"] == ""
+    assert out["submit_url"].startswith("https://github.com/me/app/issues/new?")
+
+    # It's also queued locally.
+    items = client.get("/api/feedback").get_json()["items"]
+    assert len(items) == 1 and items[0]["title"] == "Add EPG cache"
+
+    # A blank title is rejected.
+    assert client.post("/api/feedback", json={"title": ""}).status_code == 400
+
+
 def _locked_setup(tmp_path, monkeypatch, enforce):
     from tunaar import license as lic
     # First source: a tvg-id'd channel that survives the cap, plus filler over

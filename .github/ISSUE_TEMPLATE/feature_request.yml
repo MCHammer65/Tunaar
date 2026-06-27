@@ -1,0 +1,19 @@
+name: ✨ Feature request
+description: Suggest a feature or improvement (also reachable from the in-app Feedback button)
+labels: ["feature"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What would you like?
+      description: A clear description of the feature and the problem it solves.
+      placeholder: "I'd like Tunaar to…"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Your setup (player, NAS), examples, or links that help.
+    validations:
+      required: false

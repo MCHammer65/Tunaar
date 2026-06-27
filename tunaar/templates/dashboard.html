@@ -33,6 +33,33 @@
       </div>
     </div>
   </div>
+
+  <!-- Autopilot · feedback / feature request -->
+  <div class="wiz-overlay" id="fb">
+    <div class="wiz" style="max-width:520px">
+      <div class="wiz-head">
+        <img src="{{ url_for('static', filename='logo.svg') }}" alt="">
+        <div class="t">Send <span>feedback</span></div>
+      </div>
+      <div class="wiz-body">
+        <p class="lead">Found a bug or want a feature? Tell us — it goes straight into our queue.</p>
+        <div class="form-row" style="margin-top:0">
+          <label class="switch"><input type="radio" name="fb-kind" value="feature" checked> Feature request</label>
+          <label class="switch"><input type="radio" name="fb-kind" value="bug"> Bug report</label>
+        </div>
+        <input id="fb-title" class="inp" placeholder="Short summary" maxlength="140" style="margin-top:10px">
+        <textarea id="fb-msg" class="inp" rows="4" placeholder="Details (what happened, what you expected)…" style="margin-top:8px"></textarea>
+        <input id="fb-email" class="inp" placeholder="Your email (optional, for follow-up)" maxlength="200" style="margin-top:8px">
+        <p class="hint" id="fb-msgout" style="display:none"></p>
+      </div>
+      <div class="wiz-foot">
+        <button class="btn-ghost" id="fb-cancel" type="button">Cancel</button>
+        <span class="spacer"></span>
+        <button class="btn" id="fb-send" type="button">Send</button>
+      </div>
+    </div>
+  </div>
+
   <header>
     <img src="{{ url_for('static', filename='logo.svg') }}" alt="{{ name }} logo">
     <div>
@@ -43,6 +70,7 @@
       <a href="/" class="active">Dashboard</a>
       <a href="/console">Console</a>
       <a href="#" id="wiz-open">Setup wizard</a>
+      <a href="#" id="fb-open">Feedback</a>
       <a href="/about">About</a>
       <a href="/docs/user-guide.html" target="_blank" rel="noopener">Guide ↗</a>
     </nav>
@@ -714,6 +742,43 @@
     $('wiz-back').addEventListener('click', () => { if (wizI > 0) { wizI--; renderWiz(); } });
     $('wiz-skip').addEventListener('click', async () => { await markSetupDone(); closeWiz(); });
     $('wiz-open').addEventListener('click', (e) => { e.preventDefault(); openWiz(0); });
+
+    // Feedback / feature-request widget.
+    function closeFb() { $('fb').classList.remove('open'); }
+    $('fb-open').addEventListener('click', (e) => {
+      e.preventDefault();
+      $('fb-msgout').style.display = 'none';
+      $('fb').classList.add('open');
+    });
+    $('fb-cancel').addEventListener('click', closeFb);
+    $('fb').addEventListener('click', (e) => { if (e.target === $('fb')) closeFb(); });
+    $('fb-send').addEventListener('click', async () => {
+      const title = $('fb-title').value.trim();
+      const out = $('fb-msgout');
+      if (!title) { out.style.display = 'block'; out.textContent = 'Please add a short summary.'; return; }
+      const kind = document.querySelector('input[name="fb-kind"]:checked').value;
+      const btn = $('fb-send'); btn.disabled = true; btn.textContent = 'Sending…';
+      try {
+        const r = await (await fetch('/api/feedback', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind, title, message: $('fb-msg').value.trim(), email: $('fb-email').value.trim() })
+        })).json();
+        if (r.submit_url) {
+          // Tokenless: open a pre-filled GitHub issue for the user to post.
+          window.open(r.submit_url, '_blank', 'noopener');
+          out.style.display = 'block'; out.innerHTML = '✓ Opening GitHub to finish posting your request…';
+        } else if (r.issue_url) {
+          out.style.display = 'block'; out.innerHTML = '✓ Filed — thank you! <a href="' + r.issue_url + '" target="_blank" rel="noopener">view issue ↗</a>';
+        } else if (r.ok) {
+          out.style.display = 'block'; out.textContent = '✓ Thanks — your feedback was saved.';
+        } else {
+          out.style.display = 'block'; out.textContent = '✕ ' + (r.message || 'Could not send.');
+        }
+        if (r.ok) { $('fb-title').value = ''; $('fb-msg').value = ''; }
+      } catch (e) {
+        out.style.display = 'block'; out.textContent = '✕ Network error — please try again.';
+      } finally { btn.disabled = false; btn.textContent = 'Send'; }
+    });
 
     // Auto-open on a clean/first-run setup.
     (async () => {

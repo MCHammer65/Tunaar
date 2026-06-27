@@ -1,0 +1,48 @@
+# Autopilot · Pillar 2 — approve-before-build gate.
+#
+# The triage queue is GitHub issues + labels. Feedback captured in-app arrives
+# as `feature` / `bug` issues. The owner triages by applying `approved`,
+# `declined`, or `changes-requested`. ONLY `approved` proceeds toward a build —
+# nothing is implemented without explicit owner sign-off.
+#
+# The implementation agent itself (Pillar 1) plugs in at the marked step and
+# stays inert until ANTHROPIC_API_KEY is configured, so this workflow never
+# writes code on its own just by existing.
+name: Autopilot — approved build gate
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  gate:
+    # Fire only when the owner adds the `approved` label.
+    if: github.event.label.name == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record owner sign-off
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '✅ **Approved** — queued for implementation. Owner sign-off recorded; '
+                  + 'this is the only path that triggers a build.'
+            })
+
+      # --- Pillar 1 implementation agent plugs in here ----------------------
+      # Inert unless the owner sets ANTHROPIC_API_KEY, so no code is written
+      # without explicit enablement. Replace the echo with the build action.
+      - name: Implementation agent (opt-in)
+        env:
+          HAVE_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        if: env.HAVE_KEY == 'true'
+        run: |
+          echo "Build agent would run for issue #${{ github.event.issue.number }}."
+          echo "Wire the Pillar 1 action here (diagnose -> PR -> CI gate)."

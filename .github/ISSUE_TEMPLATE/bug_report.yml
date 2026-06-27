@@ -1,0 +1,25 @@
+name: 🐞 Bug report
+description: Report something not working (also reachable from the in-app Feedback button)
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What went wrong, and what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Tunaar version
+      placeholder: "e.g. 0.9.1"
+    validations:
+      required: false
+  - type: textarea
+    id: env
+    attributes:
+      label: Setup
+      description: Player (Plex/Emby/Jellyfin), platform (Unraid/QNAP/Synology…), stream mode.
+    validations:
+      required: false
