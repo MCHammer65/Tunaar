@@ -779,6 +779,9 @@ def create_app(config: Config | None = None) -> Flask:
         }
         if limit:
             source["limit"] = limit
+        # HDHomeRun lineup cleanup (skip radio/adult/shopping/+1).
+        if source["type"] == "hdhr" and body.get("clean"):
+            source["clean"] = True
         config.sources.append(source)
 
         # Auto-derive the provider's XMLTV guide for Xtream-style playlists.

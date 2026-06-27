@@ -100,6 +100,10 @@
           <input id="src-limit" class="inp" type="number" min="0" placeholder="Max ch." style="flex:0 0 90px" title="Cap channels from this source (0 = no limit)">
           <button id="src-add" class="btn" type="button">Add</button>
         </div>
+        <label class="switch" id="src-clean-row" style="display:none;margin-top:8px">
+          <input id="src-clean" type="checkbox">
+          <span>Clean lineup — skip radio, shopping, adult &amp; +1 channels</span>
+        </label>
         <p class="hint" id="src-msg" style="display:none"></p>
       </div>
 
@@ -449,15 +453,23 @@
     $('map-search').addEventListener('input', loadMapList);
     $('map-unmatched').addEventListener('change', loadMapList);
 
+    // Show the HDHomeRun "clean lineup" option only when that type is selected.
+    function syncSrcType() {
+      $('src-clean-row').style.display = $('src-type').value === 'hdhr' ? 'flex' : 'none';
+    }
+    $('src-type').addEventListener('change', syncSrcType);
+    syncSrcType();
+
     $('src-add').addEventListener('click', async () => {
       const url = $('src-url').value.trim();
       if (!url) return;
       const limit = parseInt($('src-limit').value, 10) || 0;
       const r = await (await fetch('/api/sources', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: $('src-name').value.trim(), url, group: $('src-group').value.trim(), type: $('src-type').value, limit })
+        body: JSON.stringify({ name: $('src-name').value.trim(), url, group: $('src-group').value.trim(), type: $('src-type').value, limit, clean: $('src-clean').checked })
       })).json();
       $('src-name').value = $('src-url').value = $('src-group').value = $('src-limit').value = '';
+      $('src-clean').checked = false;
       const msg = $('src-msg');
       if (r && r.derived_epg) {
         msg.style.display = 'block';
