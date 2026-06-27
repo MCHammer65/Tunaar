@@ -37,10 +37,30 @@ the matching **public** key (`TUNAAR_LICENSE_PUBKEY`).
 | Variable | Required | Purpose |
 |---|---|---|
 | `TUNAAR_LICENSE_PRIVKEY` | ✅ | Ed25519 private seed (hex) used to sign keys |
-| `LS_WEBHOOK_SECRET` | ✅ | Lemon Squeezy webhook signing secret |
+| `LS_WEBHOOK_SECRET` | ✅¹ | Lemon Squeezy webhook signing secret |
 | `LS_VARIANT_LIFETIME` | – | Variant id that means "lifetime" (else name contains "lifetime") |
+| `STRIPE_WEBHOOK_SECRET` | ✅² | Stripe endpoint signing secret (`whsec_…`) |
+| `STRIPE_LIFETIME_AMOUNT` | – | `amount_total` in minor units that means "lifetime" (else set `metadata.plan`) |
 | `TUNAAR_ANNUAL_DAYS` | – | Annual length in days (default 365) |
 | `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` | – | Email out; if unset, keys are logged |
+
+¹ Required only if you use Lemon Squeezy (`/webhook`). ² Required only if you
+use Stripe (`/stripe-webhook`). You can run either or both.
+
+## Using Stripe instead of (or alongside) Lemon Squeezy
+
+Stripe acquired Lemon Squeezy, but they serve different needs: **Lemon Squeezy
+is a Merchant of Record** (it handles your VAT/sales tax), whereas with **raw
+Stripe you are the merchant of record** and must register for and remit tax
+yourself. For a small company selling worldwide, Lemon Squeezy is usually less
+admin.
+
+To use Stripe: create two Products/Prices (annual subscription + one-off
+lifetime), add a webhook for **`checkout.session.completed`** pointing at
+`https://your-host/stripe-webhook`, set `STRIPE_WEBHOOK_SECRET`, and either set
+`STRIPE_LIFETIME_AMOUNT` (the lifetime price in pence/cents) or pass
+`metadata.plan = "lifetime"` when creating the checkout. The handler signs and
+emails a key exactly like the Lemon Squeezy path.
 
 ## Run
 

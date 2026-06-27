@@ -109,6 +109,69 @@ def deliver(email: str, key: str, plan: str) -> None:
     log.info("Emailed %s key to %s", plan, email)
 
 
+# --------------------------------------------------------------------------
+# Stripe (alternative to Lemon Squeezy). With Stripe you are the merchant of
+# record and handle your own VAT/sales tax. Configure:
+#   STRIPE_WEBHOOK_SECRET   the endpoint signing secret (whsec_...)
+#   STRIPE_LIFETIME_AMOUNT  (optional) amount_total in minor units (e.g. pence)
+#                           that means "lifetime"; else set metadata.plan at
+#                           checkout, or it defaults to annual.
+# Point a Stripe webhook for `checkout.session.completed` at /stripe-webhook.
+# --------------------------------------------------------------------------
+
+def verify_stripe_signature(raw_body: bytes, sig_header: str) -> bool:
+    secret = _env("STRIPE_WEBHOOK_SECRET")
+    if not secret or not sig_header:
+        return False
+    parts = dict(p.split("=", 1) for p in sig_header.split(",") if "=" in p)
+    t, v1 = parts.get("t"), parts.get("v1")
+    if not t or not v1:
+        return False
+    signed = t.encode() + b"." + raw_body
+    expected = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, v1)
+
+
+def plan_for_stripe(session: dict) -> tuple[str, int]:
+    meta = session.get("metadata") or {}
+    plan = (meta.get("plan") or "").strip().lower()
+    if plan == "lifetime":
+        return "lifetime", 0
+    if plan == "annual":
+        return "annual", int(_env("TUNAAR_ANNUAL_DAYS", "365"))
+    lifetime_amount = _env("STRIPE_LIFETIME_AMOUNT")
+    if lifetime_amount and str(session.get("amount_total")) == lifetime_amount:
+        return "lifetime", 0
+    return "annual", int(_env("TUNAAR_ANNUAL_DAYS", "365"))
+
+
+@app.post("/stripe-webhook")
+def stripe_webhook():
+    raw = request.get_data()
+    if not verify_stripe_signature(raw, request.headers.get("Stripe-Signature", "")):
+        return jsonify({"error": "bad signature"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    if payload.get("type") != "checkout.session.completed":
+        return jsonify({"ok": True, "ignored": payload.get("type")}), 200
+
+    session = (payload.get("data") or {}).get("object") or {}
+    email = (session.get("customer_details") or {}).get("email") or session.get("customer_email")
+    if not email:
+        log.warning("No email in Stripe session; skipping")
+        return jsonify({"ok": True, "skipped": "no email"}), 200
+
+    priv = _env("TUNAAR_LICENSE_PRIVKEY")
+    if not priv:
+        log.error("TUNAAR_LICENSE_PRIVKEY not set — cannot sign keys")
+        return jsonify({"error": "server not configured"}), 500
+
+    plan, days = plan_for_stripe(session)
+    key = lic.make_key(priv, email, plan=plan, days=days)
+    deliver(email, key, plan)
+    return jsonify({"ok": True, "plan": plan, "email": email}), 200
+
+
 @app.get("/healthz")
 def healthz():
     return jsonify({"ok": True})
