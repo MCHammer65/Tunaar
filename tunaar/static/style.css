@@ -159,6 +159,15 @@ textarea.inp { resize: vertical; }
 .chip em { color: var(--accent-2); font-style: normal; }
 .chip a.x { color: var(--err); cursor: pointer; margin-left: 4px; font-weight: 700; }
 
+/* ---- License panel "what you get" ---- */
+.lic-what { margin-top: 12px; }
+.lic-tiers { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.lic-tier { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+.lic-tier b { color: var(--accent-2); }
+.lic-tier.lic-free { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.lic-perks { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+.lic-perks li { margin: 3px 0; }
+
 .switch { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .switch input { width: 16px; height: 16px; accent-color: var(--accent); }
 
