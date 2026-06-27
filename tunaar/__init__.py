@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Tunaar — a robust, single-container IPTV-to-Plex bridge.
 
 Tunaar emulates a Silicondust HDHomeRun network tuner so Plex (and Emby /
