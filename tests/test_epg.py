@@ -45,6 +45,19 @@ def test_unique_titles_folds_subtitle():
     assert b"MLB Baseball</title>" in epg.build(doc).xml
 
 
+def test_unique_titles_skips_episodic():
+    # A programme with a season/episode tag must be left alone (Plex handles it).
+    doc = (
+        b'<tv><channel id="c1"><display-name>S</display-name></channel>'
+        b'<programme start="1" channel="c1"><title>The Office</title>'
+        b'<sub-title>Dinner Party</sub-title>'
+        b'<episode-num system="xmltv_ns">3.13.</episode-num></programme></tv>'
+    )
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(epg.build(doc, unique_titles=True).xml)
+    assert root.find("programme/title").text == "The Office"  # unchanged
+
+
 def test_unique_titles_desc_fallback():
     # No sub-title, but a desc → first sentence is folded in, truncated.
     doc = (

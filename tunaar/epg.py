@@ -84,6 +84,14 @@ def _disambiguator(programme) -> str:
     return snippet
 
 
+def _has_episode_num(programme) -> bool:
+    """True if the programme carries a real season/episode number."""
+    for el in programme.findall("episode-num"):
+        if el.text and any(ch.isdigit() for ch in el.text):
+            return True
+    return False
+
+
 def _fold_subtitle(programme) -> None:
     """Append a per-airing disambiguator to a programme's <title> so the title
     is unique.
@@ -91,9 +99,15 @@ def _fold_subtitle(programme) -> None:
     Defeats a Plex DVR bug that shares one description across all programmes
     with an identical title (e.g. "MLB Baseball" on many channels). Uses the
     <sub-title> when present, otherwise the first line of the <desc>.
+
+    Episodic content (anything with an <episode-num>) is left alone: Plex
+    already distinguishes those by season/episode, so folding the sub-title in
+    would only clutter the guide.
     """
     title_el = programme.find("title")
     if title_el is None or title_el.text is None:
+        return
+    if _has_episode_num(programme):
         return
     title = title_el.text.strip()
     extra = _disambiguator(programme)
