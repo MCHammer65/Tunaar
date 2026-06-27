@@ -193,6 +193,65 @@ def test_align_ids_toggle_persists(client):
     assert client.get("/api/config").get_json()["epg_align_ids"] is True
 
 
+def _locked_setup(tmp_path, monkeypatch, enforce):
+    from tunaar import license as lic
+    # First source: a tvg-id'd channel that survives the cap, plus filler over
+    # the basic channel limit. Second source must be dropped entirely in basic.
+    big = '#EXTM3U\n#EXTINF:-1 tvg-id="keep",Keep\nhttp://x/keep\n' + "".join(
+        f'#EXTINF:-1,Ch {i}\nhttp://x/{i}\n' for i in range(lic.BASIC_MAX_CHANNELS + 40)
+    )
+    extra = '#EXTM3U\n#EXTINF:-1,Extra\nhttp://x/extra\n'
+    monkeypatch.setattr(m3u, "_fetch_text",
+                        lambda src, **k: extra if "second" in src else big)
+    monkeypatch.setattr("tunaar.epg.fetch", lambda url, **k: (
+        b'<tv><channel id="keep"><display-name>Keep</display-name></channel>'
+        b'<programme start="20260101060000 +0000" channel="keep"><title>X</title></programme></tv>'
+    ))
+    cfg = Config(
+        device_id="LCK1",
+        sources=[{"name": "A", "url": "http://x/first.m3u"},
+                 {"name": "B", "url": "http://x/second.m3u"}],
+        epg_urls=["http://x/g.xml"],
+        epg_auto=False,
+        epg_align_ids=True,
+        license_enforce=enforce,
+        trial_start=1.0,  # ancient → trial long expired
+        stream_mode="redirect",
+        path=str(tmp_path / "config.json"),
+    )
+    return create_app(cfg).test_client()
+
+
+def test_basic_tier_locks_down(tmp_path, monkeypatch):
+    from tunaar import license as lic
+    client = _locked_setup(tmp_path, monkeypatch, enforce="premium")
+    st = client.get("/api/status").get_json()
+    assert st["license"]["basic_locked"] is True
+    assert st["license"]["state"] == "expired"
+    assert st["capped"] is True
+    # Only the first source loads, capped to the basic channel limit.
+    assert st["channels"] == lic.BASIC_MAX_CHANNELS
+    # Premium guide re-keying is off → served guide keeps the original id.
+    served = client.get("/epg.xml").get_data()
+    assert b'id="keep"' in served
+    # Premium conveniences are gated.
+    assert client.post("/api/sources", json={"preset": "uk"}).status_code == 402
+
+
+def test_nag_mode_keeps_all_features(tmp_path, monkeypatch):
+    from tunaar import license as lic
+    client = _locked_setup(tmp_path, monkeypatch, enforce="nag")
+    st = client.get("/api/status").get_json()
+    # Trial expired but nag mode never locks: full lineup, no cap, just a nag.
+    assert st["license"]["basic_locked"] is False
+    assert st["license"]["nag"] is True
+    assert st["capped"] is False
+    assert st["channels"] > lic.BASIC_MAX_CHANNELS
+    # Premium guide re-keying still applies (Keep becomes channel number "1").
+    served = client.get("/epg.xml").get_data()
+    assert b'id="1"' in served and b'id="keep"' not in served
+
+
 def test_setup_complete_flag(client, app):
     # Fresh config defaults to not-complete so the wizard auto-opens.
     assert client.get("/api/config").get_json()["setup_complete"] is False

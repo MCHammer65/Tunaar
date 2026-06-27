@@ -416,11 +416,11 @@
       } else {
         b.style.display = 'block';
         b.style.borderColor = ''; b.style.color = '';
-        b.innerHTML = lic.enforce === 'premium'
-          ? 'Your Tunaar trial has ended — channels keep streaming, but premium features are locked. Add a license below.'
+        b.innerHTML = lic.basic_locked
+          ? 'Your Tunaar trial has ended — now in <b>basic mode</b> (one source, up to 100 channels; premium reliability features off). Add a license below to restore everything.'
           : 'Your Tunaar trial has ended — everything still works. Please consider a license to support development. 🙏';
-        if (ls) ls.textContent = lic.enforce === 'premium'
-          ? 'Trial ended — premium features locked.'
+        if (ls) ls.textContent = lic.basic_locked
+          ? 'Trial ended — basic mode (capped). Add a license to unlock.'
           : 'Trial ended — please consider a license.';
       }
     }

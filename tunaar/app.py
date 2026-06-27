@@ -58,8 +58,9 @@ def _base_url(config: Config) -> str:
 class ChannelCache:
     """Thread-safe cache of the merged, group-filtered playlist."""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, is_locked=None) -> None:
         self._config = config
+        self._is_locked = is_locked or (lambda: False)
         self._lock = threading.Lock()
         self._channels: list[m3u.Channel] = []
         self._all_groups: list[str] = []
@@ -67,6 +68,7 @@ class ChannelCache:
         self._fetched_at = 0.0
         self._error: str | None = None
         self._failed: list[str] = []
+        self._capped = False  # basic-tier caps applied to this load
 
     def _passes_group_filter(self, group: str) -> bool:
         inc = self._config.groups_include
@@ -83,14 +85,23 @@ class ChannelCache:
             if self._channels and not stale:
                 return self._channels
             try:
+                # Basic tier (locked, unlicensed): only the first source loads
+                # and the lineup is capped — the bridge still works, just limited.
+                locked = self._is_locked()
+                self._capped = locked
+                sources = self._config.sources
+                if locked:
+                    sources = sources[: licensing.BASIC_MAX_SOURCES]
                 playlist = m3u.load_sources(
-                    self._config.sources, user_agent=self._config.user_agent
+                    sources, user_agent=self._config.user_agent
                 )
                 self._all_groups = sorted({c.group for c in playlist.channels})
                 self._discovered_epg = playlist.epg_urls
                 kept = [
                     c for c in playlist.channels if self._passes_group_filter(c.group)
                 ]
+                if locked:
+                    kept = kept[: licensing.BASIC_MAX_CHANNELS]
                 m3u.assign_numbers(kept)
                 self._channels = kept
                 # Always stamp the load time, even with some sources skipped, so
@@ -142,6 +153,10 @@ class ChannelCache:
     def failed(self) -> list[str]:
         return self._failed
 
+    @property
+    def capped(self) -> bool:
+        return self._capped
+
 
 class LicenseCache:
     """Validates the license key against Lemon Squeezy, cached with a grace
@@ -173,7 +188,7 @@ class LicenseCache:
         now = time.time()
         key = (cfg.license_key or "").strip()
         if not key:
-            return licensing.trial_state(cfg.trial_start, now)
+            return licensing.evaluate(None, cfg.trial_start, now, enforce=cfg.license_enforce)
         with self._lock:
             stale = (now - self._checked_at) > self.REVALIDATE
             if self._result is None or stale:
@@ -185,15 +200,16 @@ class LicenseCache:
                 elif self._result and (now - self._ok_at) > licensing.NET_GRACE_DAYS * licensing.DAY:
                     self._result = None  # offline too long; stop trusting
             res = self._result
-        return licensing.evaluate(res, cfg.trial_start, now)
+        return licensing.evaluate(res, cfg.trial_start, now, enforce=cfg.license_enforce)
 
 
 class EpgCache:
     """Thread-safe cache of the (optionally filtered) XMLTV guide."""
 
-    def __init__(self, config: Config, channels: ChannelCache) -> None:
+    def __init__(self, config: Config, channels: ChannelCache, is_locked=None) -> None:
         self._config = config
         self._channels = channels
+        self._is_locked = is_locked or (lambda: False)
         self._lock = threading.Lock()
         self._result: epg.EpgResult | None = None
         self._fetched_at = 0.0
@@ -242,7 +258,10 @@ class EpgCache:
                 full = epg.build_many(raw_docs, keep_ids=None)
                 self._guide_index = dict(full.id_to_name)
                 chans = self._channels.get()
-                overrides = self._config.epg_overrides or {}
+                # Basic tier: manual EPG mapping and the premium guide fixes are
+                # off; auto name-matching still works so the guide isn't empty.
+                locked = self._is_locked()
+                overrides = {} if locked else (self._config.epg_overrides or {})
                 matched_by_name = 0
                 for ch in chans:
                     # A manual mapping always wins over auto name-matching.
@@ -256,8 +275,8 @@ class EpgCache:
                             matched_by_name += 1
 
                 lineup_ids = {c.tvg_id for c in chans if c.tvg_id}
-                uniq = self._config.epg_unique_titles
-                if self._config.epg_align_ids:
+                uniq = self._config.epg_unique_titles and not locked
+                if self._config.epg_align_ids and not locked:
                     # Re-key the guide to lineup numbers so every player matches
                     # by channel number — no "0 channels matched".
                     number_to_id = {
@@ -322,9 +341,14 @@ def create_app(config: Config | None = None) -> Flask:
     config = config or Config.load()
     app = Flask(__name__)
 
-    channels = ChannelCache(config)
-    guide = EpgCache(config, channels)
     licenses = LicenseCache(config)
+    # True when entitlement has lapsed and enforcement is on — the caches then
+    # serve the capped basic tier. Cheap: LicenseCache.get() is itself cached.
+    def basic_locked() -> bool:
+        return bool(licenses.get().get("basic_locked"))
+
+    channels = ChannelCache(config, is_locked=basic_locked)
+    guide = EpgCache(config, channels, is_locked=basic_locked)
     tuners = proxy.TunerManager(config.tuner_count)
 
     bus = LogBus()
@@ -453,8 +477,9 @@ def create_app(config: Config | None = None) -> Flask:
                 ch.url, user_agent=config.user_agent, chunk=config.buffer_chunk
             )
 
-        # Keep the channel alive across source drops/EOF when enabled.
-        source = proxy.stabilize(make_source) if config.stream_reconnect else make_source()
+        # Keep the channel alive across source drops/EOF (premium; off in basic).
+        reconnect = config.stream_reconnect and not basic_locked()
+        source = proxy.stabilize(make_source) if reconnect else make_source()
 
         def generate():
             try:
@@ -633,6 +658,7 @@ def create_app(config: Config | None = None) -> Flask:
                 "stream_mode": config.stream_mode,
                 "ffmpeg": proxy.ffmpeg_available(config.ffmpeg_path),
                 "channels": len(chans),
+                "capped": channels.capped,
                 "playlist_error": channels.error,
                 "playlist_failed": channels.failed,
                 "epg": {
@@ -738,6 +764,9 @@ def create_app(config: Config | None = None) -> Flask:
             config.save()
         except OSError:
             pass
+        # A licence change can lift (or impose) the basic-tier caps, so rebuild
+        # the lineup/guide on the next request.
+        _refresh()
         return jsonify({"ok": True, **_license()})
 
     @app.get("/api/config")
