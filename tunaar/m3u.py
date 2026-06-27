@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 
 import requests
 
+from . import netguard
+
 log = logging.getLogger("tunaar")
 
 _ATTR_RE = re.compile(r'([\w-]+)="([^"]*)"')
@@ -122,6 +124,7 @@ def assign_numbers(channels: list[Channel]) -> list[Channel]:
 
 def _fetch_text(source: str, *, user_agent: str, timeout: int) -> str:
     if source.startswith(("http://", "https://")):
+        netguard.check_url(source)
         resp = requests.get(
             source, timeout=timeout, headers={"User-Agent": user_agent}
         )
@@ -268,6 +271,7 @@ def load_hdhr(
     # wrong HDHomeRun address can't stall the whole playlist rebuild.
     to = (5, min(timeout, 15))
     base = url.rstrip("/")
+    netguard.check_url(base)
     if base.endswith("lineup.json"):
         lineup_url = base
     elif base.endswith("discover.json"):
@@ -276,6 +280,7 @@ def load_hdhr(
     else:
         lineup_url = base + "/lineup.json"
 
+    netguard.check_url(lineup_url)
     data = requests.get(lineup_url, timeout=to, headers=headers).json()
     channels: list[Channel] = []
     for item in data:

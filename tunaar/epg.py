@@ -19,6 +19,8 @@ from datetime import date
 
 import requests
 
+from . import netguard
+
 EMPTY_XMLTV = (
     b'<?xml version="1.0" encoding="UTF-8"?>\n'
     b'<tv generator-info-name="Tunaar"></tv>\n'
@@ -58,6 +60,7 @@ def fetch(source: str, *, user_agent: str | None = None, timeout: int = 60) -> b
     (e.g. epgshare01) return 404/403 to non-browser agents.
     """
     if source.startswith(("http://", "https://")):
+        netguard.check_url(source)
         headers = {"User-Agent": user_agent or BROWSER_UA}
         resp = requests.get(source, timeout=timeout, headers=headers)
         resp.raise_for_status()
