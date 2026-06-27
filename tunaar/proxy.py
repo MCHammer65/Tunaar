@@ -150,6 +150,46 @@ def direct_stream(
             time.sleep(min(2 ** attempt, 5))
 
 
+def stabilize(make_source, *, max_retries: int = 20, settle: float = 10.0):
+    """Supervise a byte-stream source, restarting it when it ends prematurely.
+
+    IPTV sources drop, EOF, or rotate tokens mid-broadcast; when the underlying
+    pull ends, the player would normally lose the channel. ``make_source`` is a
+    zero-arg callable returning a *fresh* byte generator (a new ffmpeg/direct
+    pull). When a source ends while the client is still connected, a new one is
+    started so the feed stays continuous.
+
+    A source that ran at least ``settle`` seconds and delivered data is treated
+    as healthy — the drop was a hiccup and the failure budget resets. Sources
+    that die immediately count down ``max_retries`` (with a capped backoff so a
+    permanently-dead source can't hot-loop) before giving up. When the client
+    disconnects, ``GeneratorExit`` propagates through and **no** restart happens.
+    """
+    failures = 0
+    while True:
+        started = time.time()
+        produced = False
+        source = make_source()
+        try:
+            for data in source:
+                produced = True
+                yield data
+        finally:
+            # Closing the source on any exit (incl. client disconnect) tears
+            # down the ffmpeg process / upstream connection deterministically.
+            close = getattr(source, "close", None)
+            if close is not None:
+                close()
+        # Source ended on its own (client still attached). Restart or give up.
+        if produced and (time.time() - started) >= settle:
+            failures = 0  # healthy run — treat the end as a transient hiccup
+        else:
+            failures += 1
+            if failures > max_retries:
+                return
+        time.sleep(min(2 ** min(failures, 3), 5))
+
+
 def _terminate(proc: subprocess.Popen) -> None:
     if proc.poll() is None:
         proc.terminate()

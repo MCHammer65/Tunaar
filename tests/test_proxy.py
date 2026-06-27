@@ -41,6 +41,80 @@ def test_double_release_is_safe():
     assert mgr.in_use == 0
 
 
+def test_stabilize_gives_up_on_dead_source(monkeypatch):
+    monkeypatch.setattr(proxy.time, "sleep", lambda *_: None)
+    calls = {"n": 0}
+
+    def make_source():
+        calls["n"] += 1
+        return iter(())  # dies immediately, no bytes
+
+    out = list(proxy.stabilize(make_source, max_retries=2))
+    assert out == []
+    # failures 1, 2, then 3 > max_retries → stop. Three attempts.
+    assert calls["n"] == 3
+
+
+def test_stabilize_restarts_after_data_then_gives_up(monkeypatch):
+    monkeypatch.setattr(proxy.time, "sleep", lambda *_: None)
+    scripts = [[b"a", b"b"], [], []]
+    calls = {"n": 0}
+
+    def make_source():
+        i = calls["n"]
+        calls["n"] += 1
+        return iter(scripts[i] if i < len(scripts) else ())
+
+    # An instant run (even with data) counts as a failure, so the budget winds
+    # down: produce a,b then two empties → stop after the third attempt.
+    out = list(proxy.stabilize(make_source, max_retries=2))
+    assert out == [b"a", b"b"]
+    assert calls["n"] == 3
+
+
+def test_stabilize_resets_budget_after_healthy_run(monkeypatch):
+    monkeypatch.setattr(proxy.time, "sleep", lambda *_: None)
+    # A clock that advances 100s per call, so every run clears the settle window.
+    ticks = iter(range(0, 100000, 100))
+    monkeypatch.setattr(proxy.time, "time", lambda: next(ticks))
+    scripts = [[b"x"], [b"x"], [b"x"], [], []]
+    calls = {"n": 0}
+
+    def make_source():
+        i = calls["n"]
+        calls["n"] += 1
+        return iter(scripts[i] if i < len(scripts) else ())
+
+    out = list(proxy.stabilize(make_source, max_retries=1, settle=10))
+    # 3 healthy runs keep resetting the budget; only the trailing empties trip
+    # it (failures 1, then 2 > 1). Without reset it'd give up far sooner.
+    assert out == [b"x", b"x", b"x"]
+    assert calls["n"] == 5
+
+
+def test_stabilize_no_restart_on_client_disconnect(monkeypatch):
+    monkeypatch.setattr(proxy.time, "sleep", lambda *_: None)
+    calls = {"n": 0}
+    closed = {"v": False}
+
+    def infinite():
+        try:
+            while True:
+                yield b"x"
+        finally:
+            closed["v"] = True
+
+    def make_source():
+        calls["n"] += 1
+        return infinite()
+
+    gen = proxy.stabilize(make_source)
+    assert next(gen) == b"x"
+    gen.close()  # client disconnected
+    assert calls["n"] == 1  # not restarted
+    assert closed["v"] is True  # underlying source was torn down
+
+
 def test_ffmpeg_cmd_has_reconnect_and_mpegts():
     cmd = proxy.build_ffmpeg_cmd(
         "http://src/stream", ffmpeg_path="ffmpeg", user_agent="UA"

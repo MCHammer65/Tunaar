@@ -306,6 +306,16 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
       <tr><td><b>redirect</b></td><td>Hands Plex the source URL directly — lowest load, but Plex must reach the source itself.</td></tr>
     </table>
 
+    <h3>Auto-reconnect (keeps the channel alive)</h3>
+    <p>IPTV streams drop, hit end-of-file, or rotate access tokens mid-broadcast — and when the upstream pull
+       ends, most setups simply lose the channel and the player shows an error. Tunaar <b>supervises every
+       stream</b>: if the source ends while you're still watching, it restarts the pull behind the scenes so
+       the feed stays continuous and the player never notices. A source that keeps dying immediately is given
+       up on after a bounded number of retries (with backoff) so a truly dead channel can't spin forever.</p>
+    <div class="note">On by default in <b>ffmpeg</b> and <b>direct</b> modes (it doesn't apply to
+      <b>redirect</b>, where Plex talks to the source itself). Set <code>TUNAAR_STREAM_RECONNECT=false</code>
+      to turn it off for troubleshooting.</div>
+
     <h2 id="updating">Updating Tunaar</h2>
     <p>If you enabled <b>Watchtower</b> at install, you're done — it updates automatically. Otherwise:</p>
     <pre><code>cd /share/Container/tunaar

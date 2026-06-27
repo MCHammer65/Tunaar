@@ -441,17 +441,20 @@ def create_app(config: Config | None = None) -> Flask:
             ch.number, ch.name, "ffmpeg" if use_ffmpeg else "direct",
             request.remote_addr or "?",
         )
-        if use_ffmpeg:
-            source = proxy.ffmpeg_stream(
-                ch.url,
-                ffmpeg_path=config.ffmpeg_path,
-                user_agent=config.user_agent,
-                chunk=config.buffer_chunk,
-            )
-        else:
-            source = proxy.direct_stream(
+        def make_source():
+            if use_ffmpeg:
+                return proxy.ffmpeg_stream(
+                    ch.url,
+                    ffmpeg_path=config.ffmpeg_path,
+                    user_agent=config.user_agent,
+                    chunk=config.buffer_chunk,
+                )
+            return proxy.direct_stream(
                 ch.url, user_agent=config.user_agent, chunk=config.buffer_chunk
             )
+
+        # Keep the channel alive across source drops/EOF when enabled.
+        source = proxy.stabilize(make_source) if config.stream_reconnect else make_source()
 
         def generate():
             try:

@@ -36,6 +36,9 @@ DEFAULTS: dict = {
     "groups_exclude": [],  # these groups are always hidden
     "advertised_url": None,
     "stream_mode": "ffmpeg",  # ffmpeg | direct | redirect
+    # Keep the feed alive across source hiccups: if the upstream pull ends while
+    # the player is still watching, restart it so the channel never drops.
+    "stream_reconnect": True,
     "user_agent": "Tunaar/0.2 (HDHomeRun)",
     "buffer_chunk": 65536,
     "playlist_refresh": 3600,  # seconds
@@ -110,6 +113,7 @@ class Config:
     groups_exclude: list = field(default_factory=list)
     advertised_url: str | None = DEFAULTS["advertised_url"]
     stream_mode: str = DEFAULTS["stream_mode"]
+    stream_reconnect: bool = DEFAULTS["stream_reconnect"]
     user_agent: str = DEFAULTS["user_agent"]
     buffer_chunk: int = DEFAULTS["buffer_chunk"]
     playlist_refresh: int = DEFAULTS["playlist_refresh"]
