@@ -1,9 +1,10 @@
 # Tunaar Individual Contributor License Agreement
 
-Thank you for contributing to Tunaar (the "Project"), maintained by Martin
-Carpenter (the "Maintainer"). To keep the Project open-source under the
-AGPL-3.0 **and** allow the Maintainer to offer it under a separate commercial
-license, contributors must agree to this Contributor License Agreement ("CLA").
+Thank you for contributing to Tunaar (the "Project"), maintained by Muneris
+Management Ltd (the "Maintainer"), a company registered in England and Wales
+(no. 09096411). To keep the Project open-source under the AGPL-3.0 **and** allow
+the Maintainer to offer it under a separate commercial license, contributors
+must agree to this Contributor License Agreement ("CLA").
 
 By signing (see _How to sign_ below), you agree to the following terms for any
 past and future Contributions you submit to the Project.
