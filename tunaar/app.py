@@ -533,6 +533,14 @@ def create_app(config: Config | None = None) -> Flask:
             version=__version__,
         )
 
+    @app.get("/about")
+    def about() -> str:
+        return render_template(
+            "about.html",
+            name=config.friendly_name,
+            version=__version__,
+        )
+
     @app.get("/docs/")
     def docs_index() -> Response:
         return _serve_doc("index.html")
