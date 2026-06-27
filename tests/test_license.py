@@ -1,84 +1,74 @@
 # Copyright (C) 2026 Muneris Management Ltd
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Tests for offline license verification and trial logic."""
+"""Tests for Lemon Squeezy license validation and the offline trial window."""
 
-import base64
-import json
-
-from tunaar import _ed25519
 from tunaar import license as lic
 
 
-def _keypair():
-    seed, pub = _ed25519.keygen()
-    return seed, pub.hex()
+class _Resp:
+    def __init__(self, data):
+        self._data = data
+
+    def json(self):
+        return self._data
 
 
-def _b64url(b: bytes) -> str:
-    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+def _ls_response(valid=True, status="active", expires_at=None, email="a@b.com"):
+    return {
+        "valid": valid,
+        "license_key": {"status": status, "expires_at": expires_at},
+        "meta": {"customer_email": email},
+    }
 
 
-def _make_key(seed, **payload) -> str:
-    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
-    return f"{_b64url(raw)}.{_b64url(_ed25519.sign(raw, seed))}"
-
-
-def test_verify_valid_and_tampered(monkeypatch):
-    priv, pub = _keypair()
-    monkeypatch.setattr(lic, "PUBLIC_KEY_HEX", pub)
-    key = _make_key(priv, email="a@b.com", plan="annual", exp=0)
-    assert lic.verify_key(key)["email"] == "a@b.com"
-    # Tamper with the payload → signature no longer matches.
-    body, sig = key.split(".")
-    bad = _b64url(b'{"email":"x","plan":"lifetime","exp":0}') + "." + sig
-    assert lic.verify_key(bad) is None
-    # Wrong public key rejects a genuine token.
-    _, other = _keypair()
-    assert lic.verify_key(key, public_key_hex=other) is None
-
-
-def test_trial_window(monkeypatch):
-    monkeypatch.setattr(lic, "PUBLIC_KEY_HEX", "")
+def test_trial_window():
     now = 1_000_000.0
-    fresh = lic.evaluate("", now, now=now)
+    fresh = lic.trial_state(now, now)
     assert fresh["state"] == "trial" and fresh["premium"] is True
     assert fresh["days_left"] == lic.TRIAL_DAYS
-    expired = lic.evaluate("", now - 40 * lic.DAY, now=now)
+    expired = lic.trial_state(now - 40 * lic.DAY, now)
     assert expired["state"] == "expired" and expired["premium"] is False
 
 
-def test_licensed_overrides_expired_trial(monkeypatch):
-    priv, pub = _keypair()
-    monkeypatch.setattr(lic, "PUBLIC_KEY_HEX", pub)
+def test_validate_ls_valid_lifetime(monkeypatch):
+    monkeypatch.setattr(lic.requests, "post", lambda *a, **k: _Resp(_ls_response()))
+    res = lic.validate_ls("KEY")
+    assert res["reachable"] and res["valid"]
+    assert res["plan"] == "lifetime" and res["expires_at"] is None
+    assert res["email"] == "a@b.com"
+
+
+def test_validate_ls_annual_expiry(monkeypatch):
+    monkeypatch.setattr(lic.requests, "post",
+                        lambda *a, **k: _Resp(_ls_response(expires_at="2030-01-01T00:00:00Z")))
+    res = lic.validate_ls("KEY")
+    assert res["plan"] == "annual" and res["expires_at"] is not None
+
+
+def test_validate_ls_invalid_and_unreachable(monkeypatch):
+    monkeypatch.setattr(lic.requests, "post", lambda *a, **k: _Resp(_ls_response(valid=False, status="expired")))
+    assert lic.validate_ls("KEY")["valid"] is False
+    # Network error → not reachable (caller applies grace).
+    def boom(*a, **k):
+        raise RuntimeError("no network")
+    monkeypatch.setattr(lic.requests, "post", boom)
+    assert lic.validate_ls("KEY") == {"reachable": False}
+
+
+def test_evaluate_licensed_overrides_expired_trial():
     now = 2_000_000.0
-    lifetime = _make_key(priv, email="a@b.com", plan="lifetime", exp=0)
-    r = lic.evaluate(lifetime, now - 999 * lic.DAY, now=now)
-    assert r["state"] == "licensed" and r["days_left"] is None  # never expires
-    # Annual key well past grace falls back to (also expired) trial.
-    annual = _make_key(priv, email="a@b.com", plan="annual",
-                       exp=int(now - (lic.GRACE_DAYS + 1) * lic.DAY))
-    r2 = lic.evaluate(annual, now - 999 * lic.DAY, now=now)
-    assert r2["state"] == "expired"
+    licensed = {"reachable": True, "valid": True, "plan": "lifetime",
+                "email": "a@b.com", "expires_at": None}
+    out = lic.evaluate(licensed, now - 999 * lic.DAY, now=now)
+    assert out["state"] == "licensed" and out["days_left"] is None
+    # Invalid LS result with an expired trial → expired.
+    out2 = lic.evaluate({"valid": False}, now - 999 * lic.DAY, now=now)
+    assert out2["state"] == "expired" and out2["premium"] is False
 
 
-def test_annual_grace_period(monkeypatch):
-    priv, pub = _keypair()
-    monkeypatch.setattr(lic, "PUBLIC_KEY_HEX", pub)
-    now = 3_000_000.0
-    old_trial = now - 999 * lic.DAY  # trial long expired, so grace is what counts
-    # Expired 2 days ago → still within the grace window → premium kept.
-    key = _make_key(priv, email="a@b.com", plan="annual", exp=int(now - 2 * lic.DAY))
-    r = lic.evaluate(key, old_trial, now=now)
-    assert r["state"] == "grace" and r["premium"] is True
-    assert r["days_left"] == lic.GRACE_DAYS - 2
-    # Past the grace window → expired.
-    old = _make_key(priv, email="a@b.com", plan="annual",
-                    exp=int(now - (lic.GRACE_DAYS + 1) * lic.DAY))
-    assert lic.evaluate(old, old_trial, now=now)["state"] == "expired"
-
-
-def test_make_key_roundtrips(monkeypatch):
-    seed, pub = _keypair()
-    monkeypatch.setattr(lic, "PUBLIC_KEY_HEX", pub)
-    key = lic.make_key(seed.hex(), "a@b.com", plan="lifetime")
-    assert lic.verify_key(key)["plan"] == "lifetime"
+def test_evaluate_annual_days_left():
+    now = 2_000_000.0
+    res = {"valid": True, "plan": "annual", "email": "a@b.com",
+           "expires_at": now + 30 * lic.DAY}
+    out = lic.evaluate(res, 0, now=now)
+    assert out["state"] == "licensed" and out["days_left"] == 30

@@ -137,6 +137,51 @@ class ChannelCache:
         return self._error
 
 
+class LicenseCache:
+    """Validates the license key against Lemon Squeezy, cached with a grace
+    window so a brief outage doesn't drop a paying customer to 'unlicensed'."""
+
+    REVALIDATE = 12 * 3600  # re-check with Lemon Squeezy at most twice a day
+
+    def __init__(self, config: Config) -> None:
+        self._config = config
+        self._lock = threading.Lock()
+        self._result: dict | None = None   # last reachable validate_ls() result
+        self._checked_at = 0.0
+        self._ok_at = 0.0
+
+    def prime(self, result: dict) -> None:
+        """Seed the cache with a fresh result (used right after activation)."""
+        with self._lock:
+            self._result = result
+            self._checked_at = time.time()
+            self._ok_at = time.time()
+
+    def invalidate(self) -> None:
+        with self._lock:
+            self._result = None
+            self._checked_at = 0.0
+
+    def get(self) -> dict:
+        cfg = self._config
+        now = time.time()
+        key = (cfg.license_key or "").strip()
+        if not key:
+            return licensing.trial_state(cfg.trial_start, now)
+        with self._lock:
+            stale = (now - self._checked_at) > self.REVALIDATE
+            if self._result is None or stale:
+                res = licensing.validate_ls(key)
+                self._checked_at = now
+                if res.get("reachable"):
+                    self._result = res
+                    self._ok_at = now
+                elif self._result and (now - self._ok_at) > licensing.NET_GRACE_DAYS * licensing.DAY:
+                    self._result = None  # offline too long; stop trusting
+            res = self._result
+        return licensing.evaluate(res, cfg.trial_start, now)
+
+
 class EpgCache:
     """Thread-safe cache of the (optionally filtered) XMLTV guide."""
 
@@ -256,6 +301,7 @@ def create_app(config: Config | None = None) -> Flask:
 
     channels = ChannelCache(config)
     guide = EpgCache(config, channels)
+    licenses = LicenseCache(config)
     tuners = proxy.TunerManager(config.tuner_count)
 
     bus = LogBus()
@@ -610,7 +656,7 @@ def create_app(config: Config | None = None) -> Flask:
         _refresh()
 
     def _license() -> dict:
-        state = licensing.evaluate(config.license_key, config.trial_start)
+        state = licenses.get()
         state["enforce"] = config.license_enforce
         state["buy_url"] = config.buy_url
         return state
@@ -623,7 +669,7 @@ def create_app(config: Config | None = None) -> Flask:
         """
         if config.license_enforce != "premium":
             return None
-        if not licensing.evaluate(config.license_key, config.trial_start)["premium"]:
+        if not licenses.get()["premium"]:
             return jsonify({
                 "error": "premium_required",
                 "message": "Your Tunaar trial has ended — a license unlocks this feature.",
@@ -638,10 +684,24 @@ def create_app(config: Config | None = None) -> Flask:
     def api_set_license() -> Response:
         body = request.get_json(silent=True) or {}
         key = (body.get("key") or "").strip()
-        if key and licensing.verify_key(key) is None:
-            return jsonify({"error": "invalid", "message": "That license key isn't valid."}), 400
-        config.license_key = key
-        _save_and_refresh()
+        if key:
+            # Validate against Lemon Squeezy before saving, for instant feedback.
+            res = licensing.validate_ls(key)
+            if not res.get("reachable"):
+                return jsonify({"error": "unreachable",
+                                "message": "Couldn't reach Lemon Squeezy — check your connection and try again."}), 503
+            if not res.get("valid"):
+                return jsonify({"error": "invalid",
+                                "message": "That license key isn't valid or is inactive."}), 400
+            config.license_key = key
+            licenses.prime(res)
+        else:
+            config.license_key = ""
+            licenses.invalidate()
+        try:
+            config.save()
+        except OSError:
+            pass
         return jsonify({"ok": True, **_license()})
 
     @app.get("/api/config")
