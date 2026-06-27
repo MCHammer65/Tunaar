@@ -60,19 +60,46 @@ def test_unique_titles_skips_episodic():
     assert root.find("programme/title").text == "The Office"  # unchanged
 
 
-def test_unique_titles_desc_fallback():
-    # No sub-title, but a desc → first sentence is folded in, truncated.
+def test_unique_titles_injects_date_episode_num():
+    # No sub-title and no real episode-num → inject a synthetic date-based
+    # episode-num (Julian day) so Plex distinguishes airings without
+    # cluttering the title. 27 June 2026 is day 178 of a non-leap year.
     doc = (
         b'<tv><channel id="c1"><display-name>S</display-name></channel>'
-        b'<programme start="1" channel="c1"><title>Football</title>'
-        b'<desc>Arsenal v Spurs. North London derby from the Emirates.</desc></programme>'
+        b'<programme start="20260627060000 +0000" channel="c1"><title>News</title></programme>'
+        b'<programme start="20260627223000 +0000" channel="c1"><title>News</title></programme>'
         b'</tv>'
     )
     import xml.etree.ElementTree as ET
     root = ET.fromstring(epg.build(doc, unique_titles=True).xml)
-    title = root.find("programme/title").text
-    assert title.startswith("Football — Arsenal v Spurs")  # first sentence only
-    assert "North London derby" not in title
+    progs = root.findall("programme")
+    # Titles stay clean — no folded description.
+    assert all(p.find("title").text == "News" for p in progs)
+
+    def nums(p, system):
+        return [
+            e.text for e in p.findall("episode-num") if e.get("system") == system
+        ]
+
+    # First airing: S2026E178, second same-day airing gets an incrementing part.
+    assert nums(progs[0], "onscreen") == ["S2026E178"]
+    assert nums(progs[1], "onscreen") == ["S2026E178.2"]
+    # xmltv_ns is 0-indexed: 2025.177.<part>.
+    assert nums(progs[0], "xmltv_ns") == ["2025.177.0"]
+    assert nums(progs[1], "xmltv_ns") == ["2025.177.1"]
+
+
+def test_unique_titles_no_episode_num_without_date():
+    # Without a parseable start date there's nothing to inject — leave it be.
+    doc = (
+        b'<tv><channel id="c1"><display-name>S</display-name></channel>'
+        b'<programme start="1" channel="c1"><title>News</title></programme></tv>'
+    )
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(epg.build(doc, unique_titles=True).xml)
+    prog = root.find("programme")
+    assert prog.find("title").text == "News"
+    assert prog.find("episode-num") is None
 
 
 def test_norm_name():

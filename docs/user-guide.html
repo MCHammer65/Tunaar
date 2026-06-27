@@ -207,17 +207,21 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
     <p>Plex's DVR keys programme descriptions by <b>title</b>, so airings that share a title — classic
        case: <em>"MLB Baseball"</em>, <em>"Premier League"</em> on several channels — all end up with the
        <b>same</b> description. It's a Plex parser bug, not a guide problem.</p>
-    <p>Tick <b>Fix Plex duplicate-description bug</b> in the EPG panel and Tunaar folds each programme's
-       sub-title into its title in the guide it serves Plex — e.g. <em>"Football — Arsenal v Spurs"</em> vs
-       <em>"Football — Liverpool v Everton"</em>. Plex then sees distinct titles and keeps the right
-       description per game.</p>
-    <div class="note">It's off by default because it changes how titles read in Plex. Tunaar uses the
-      <code>sub-title</code> when present, and falls back to the first sentence of the
-      <code>desc</code> when there isn't one — so even feeds that put the matchup only in the description
-      get disambiguated. <b>Episodic content is left alone:</b> anything with a season/episode
-      (<code>episode-num</code>) tag is skipped, since Plex already separates those — so only sports,
-      news and other generic-title airings are touched. A programme with no sub-title and no description
-      can't be split.</div>
+    <p>Tick <b>Fix Plex duplicate-description bug</b> in the EPG panel and Tunaar disambiguates each
+       airing in the guide it serves Plex, two ways depending on what the feed provides:</p>
+    <ul>
+      <li><b>Live sports</b> (a <code>sub-title</code> like a matchup) → the sub-title is folded into the
+        title: <em>"Football — Arsenal v Spurs"</em> vs <em>"Football — Liverpool v Everton"</em>. Plex
+        sees distinct titles and keeps the right description per game.</li>
+      <li><b>Everything else</b> (news, movies, paid programming, music…) → Tunaar injects a synthetic
+        date-based <code>episode-num</code> from the airing's Julian day — e.g. <code>S2026E178</code> for
+        27 June 2026 — so each day's airing is unique <b>without touching the title</b>. Multiple distinct
+        airings on the same day get an incrementing part (<code>S2026E178.2</code>).</li>
+    </ul>
+    <div class="note">It's off by default because it changes the guide Plex receives. <b>Episodic content
+      is left alone:</b> anything that already has a season/episode (<code>episode-num</code>) tag is
+      skipped, since Plex already separates those. This keeps generic titles like <em>"News"</em> and
+      <em>"Paid Programming"</em> clean while still letting Plex store a distinct description per airing.</div>
 
     <h2 id="mapping">Manual EPG mapping</h2>
     <p>Some channels won't match the guide automatically — most often <b>regional Freeview</b> from a real

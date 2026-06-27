@@ -14,6 +14,7 @@ import gzip
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from datetime import date
 
 import requests
 
@@ -68,24 +69,6 @@ def fetch(source: str, *, user_agent: str | None = None, timeout: int = 60) -> b
     return raw
 
 
-def _disambiguator(programme) -> str:
-    """A short string that distinguishes this airing — sub-title, else a
-    trimmed first line of the description."""
-    sub_el = programme.find("sub-title")
-    sub = (sub_el.text or "").strip() if sub_el is not None else ""
-    if sub:
-        return sub
-    desc_el = programme.find("desc")
-    desc = (desc_el.text or "").strip() if desc_el is not None else ""
-    if not desc:
-        return ""
-    # First sentence/line only, capped so titles stay readable.
-    snippet = re.split(r"(?<=[.!?])\s|\n", desc, maxsplit=1)[0].strip()
-    if len(snippet) > 70:
-        snippet = snippet[:69].rstrip() + "…"
-    return snippet
-
-
 def _has_episode_num(programme) -> bool:
     """True if the programme carries a real season/episode number."""
     for el in programme.findall("episode-num"):
@@ -94,27 +77,68 @@ def _has_episode_num(programme) -> bool:
     return False
 
 
-def _fold_subtitle(programme) -> None:
-    """Append a per-airing disambiguator to a programme's <title> so the title
-    is unique.
+def _day_of_year(start: str) -> tuple[int, int] | None:
+    """Parse an XMLTV ``start`` ("YYYYMMDDhhmmss …") into ``(year, day_of_year)``.
 
-    Defeats a Plex DVR bug that shares one description across all programmes
-    with an identical title (e.g. "MLB Baseball" on many channels). Uses the
-    <sub-title> when present, otherwise the first line of the <desc>.
-
-    Episodic content (anything with an <episode-num>) is left alone: Plex
-    already distinguishes those by season/episode, so folding the sub-title in
-    would only clutter the guide.
+    Returns ``None`` if the timestamp is missing or unparseable.
     """
+    if not start or len(start) < 8 or not start[:8].isdigit():
+        return None
+    try:
+        d = date(int(start[:4]), int(start[4:6]), int(start[6:8]))
+    except ValueError:
+        return None
+    return d.year, d.timetuple().tm_yday
+
+
+def _disambiguate(programme, seq: dict) -> None:
+    """Make an airing distinguishable to Plex without cluttering its title.
+
+    Plex's DVR shares one description across every programme with an identical
+    ``<title>`` (e.g. "News" or "Paid Programming" on many channels/airings),
+    so identical-titled airings collapse into one. We break that tie:
+
+    * Programmes that already carry a real ``<episode-num>`` are left alone —
+      Plex distinguishes those by season/episode.
+    * When a ``<sub-title>`` is present (typically live sports, e.g.
+      "Team A vs Team B"), it's folded into the title ("Title — Sub") so the
+      matchup shows in the guide.
+    * Otherwise (news, movies, paid programming, music …) we inject a synthetic
+      date-based ``<episode-num>`` — Julian day of the airing — so each day's
+      airing is unique while the title stays clean. Multiple distinct airings
+      on the same day get an incrementing part (``S2026E178``, ``S2026E178.2``).
+    """
+    if _has_episode_num(programme):
+        return
+
     title_el = programme.find("title")
     if title_el is None or title_el.text is None:
         return
-    if _has_episode_num(programme):
-        return
     title = title_el.text.strip()
-    extra = _disambiguator(programme)
-    if extra and extra.lower() != title.lower() and " — " not in title:
-        title_el.text = f"{title} — {extra}"
+
+    sub_el = programme.find("sub-title")
+    sub = (sub_el.text or "").strip() if sub_el is not None else ""
+    if sub and sub.lower() != title.lower() and " — " not in title:
+        title_el.text = f"{title} — {sub}"
+        return
+
+    ymd = _day_of_year(programme.get("start", ""))
+    if ymd is None:
+        return
+    year, doy = ymd
+
+    key = (programme.get("channel", ""), title.lower(), year, doy)
+    n = seq.get(key, 0)
+    seq[key] = n + 1
+
+    # xmltv_ns is 0-indexed "season.episode.part"; onscreen is human-readable.
+    ns = ET.SubElement(programme, "episode-num")
+    ns.set("system", "xmltv_ns")
+    ns.text = f"{year - 1}.{doy - 1}.{n}"
+
+    onscreen = ET.SubElement(programme, "episode-num")
+    onscreen.set("system", "onscreen")
+    onscreen.text = f"S{year}E{doy:03d}" + (f".{n + 1}" if n else "")
 
 
 def build_many(
@@ -163,10 +187,10 @@ def build(
 
     When ``keep_ids`` is given, only ``<channel>`` and ``<programme>`` elements
     referencing those ids are retained. When ``unique_titles`` is set, each
-    programme's ``<sub-title>`` is folded into its ``<title>`` ("Title — Sub")
-    so Plex can't collapse descriptions across airings that share a title.
-    Returns the (possibly filtered) XMLTV along with the set of channel ids
-    actually present and a programme count.
+    programme is disambiguated (see :func:`_disambiguate`) so Plex can't
+    collapse descriptions across airings that share a title. Returns the
+    (possibly filtered) XMLTV along with the set of channel ids actually
+    present and a programme count.
     """
     root = ET.fromstring(raw_xml)
 
@@ -174,6 +198,7 @@ def build(
     name_to_id: dict = {}
     id_to_name: dict = {}
     programme_count = 0
+    seq: dict = {}
 
     for child in list(root):
         if child.tag == "channel":
@@ -193,7 +218,7 @@ def build(
                 continue
             programme_count += 1
             if unique_titles:
-                _fold_subtitle(child)
+                _disambiguate(child, seq)
 
     root.set("generator-info-name", "Tunaar")
     xml = b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(
