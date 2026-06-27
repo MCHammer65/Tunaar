@@ -1,110 +1,27 @@
 # Copyright (C) 2026 Muneris Management Ltd
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Offline license verification and trial tracking.
+"""License validation and trial tracking.
 
-Tunaar is self-hosted, so licensing is honour-based: the goal is to make paying
-easier than patching, not to build unbreakable DRM. Licenses are **Ed25519
-signed tokens** verified entirely offline against an embedded public key — no
-phone-home, which suits locked-down NAS networks and respects privacy.
-
-A license key is two base64url parts joined by a dot:
-
-    <base64url(payload_json)>.<base64url(signature)>
-
-``payload`` is ``{"email", "plan", "exp"}`` where ``plan`` is ``"annual"`` or
-``"lifetime"`` and ``exp`` is a unix timestamp (0/absent = never expires). The
-signature covers the raw payload bytes.
-
-The owner generates a keypair once (``scripts/sign_license.py gen``), keeps the
-private key secret to sign purchases, and ships the public key — either baked
-into ``PUBLIC_KEY_HEX`` below or via the ``TUNAAR_LICENSE_PUBKEY`` env var.
+Licenses are validated against the Lemon Squeezy licensing API. A short network
+grace window keeps a known-good license working through a brief outage, and a
+30-day offline trial covers first-run use before any key is entered. The goal is
+to make paying easier than patching, not to build unbreakable DRM.
 """
 
 from __future__ import annotations
 
-import base64
-import binascii
-import json
-import os
 import time
 from datetime import datetime
 
 import requests
 
-from . import _ed25519
-
-# Lemon Squeezy license validation (Option B — no self-hosted key server).
+# Lemon Squeezy license validation.
 LS_VALIDATE_URL = "https://api.lemonsqueezy.com/v1/licenses/validate"
 LS_ACTIVATE_URL = "https://api.lemonsqueezy.com/v1/licenses/activate"
 NET_GRACE_DAYS = 14  # keep a known-good license if Lemon Squeezy is unreachable
 
-# Replace with your real public key (hex) for production, or set
-# TUNAAR_LICENSE_PUBKEY. Empty means "no valid licenses" — trial only.
-PUBLIC_KEY_HEX = ""
-
 TRIAL_DAYS = 30
-GRACE_DAYS = 14  # keep an expired annual license working briefly during renewal
 DAY = 86400
-
-# Verification is pure-Python (a few ms) but evaluate() runs on every status
-# poll, so cache results keyed on (key, pubkey).
-_verify_cache: dict = {}
-
-
-def _public_key_hex() -> str:
-    return (os.environ.get("TUNAAR_LICENSE_PUBKEY") or PUBLIC_KEY_HEX or "").strip()
-
-
-def _b64url_decode(s: str) -> bytes:
-    pad = "=" * (-len(s) % 4)
-    return base64.urlsafe_b64decode(s + pad)
-
-
-def _b64url_encode(b: bytes) -> str:
-    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
-
-
-def make_key(
-    private_key_hex: str,
-    email: str,
-    plan: str = "annual",
-    days: int = 365,
-    now: float | None = None,
-) -> str:
-    """Sign and return a license key (owner-side; needs the private key).
-
-    ``plan`` is ``"annual"`` (expires after ``days``) or ``"lifetime"`` (never).
-    The output is verifiable by :func:`verify_key` with the matching public key.
-    """
-    seed = binascii.unhexlify(private_key_hex)
-    now = time.time() if now is None else now
-    exp = 0 if plan == "lifetime" else int(now) + days * DAY
-    payload = {"email": email, "plan": plan, "exp": exp}
-    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
-    sig = _ed25519.sign(raw, seed)
-    return f"{_b64url_encode(raw)}.{_b64url_encode(sig)}"
-
-
-def verify_key(key: str, public_key_hex: str | None = None) -> dict | None:
-    """Return the payload dict if ``key`` is validly signed, else ``None``."""
-    pub_hex = public_key_hex if public_key_hex is not None else _public_key_hex()
-    if not pub_hex or not key or "." not in key:
-        return None
-    cache_key = (key, pub_hex)
-    if cache_key in _verify_cache:
-        return _verify_cache[cache_key]
-    result = None
-    try:
-        payload_b64, sig_b64 = key.strip().split(".", 1)
-        payload_raw = _b64url_decode(payload_b64)
-        signature = _b64url_decode(sig_b64)
-        public_key = binascii.unhexlify(pub_hex)
-        if _ed25519.verify(signature, payload_raw, public_key):
-            result = json.loads(payload_raw)
-    except (ValueError, binascii.Error, json.JSONDecodeError):
-        result = None
-    _verify_cache[cache_key] = result
-    return result
 
 
 def _parse_expiry(value: str | None) -> float | None:

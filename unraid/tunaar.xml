@@ -23,6 +23,5 @@
   <Requires/>
   <Config Name="Config" Target="/config" Default="/mnt/user/appdata/tunaar" Mode="rw" Description="Persistent config (sources, guide, groups, license)." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/tunaar</Config>
   <Config Name="Dashboard port (bridge only)" Target="5004" Default="5004" Mode="tcp" Description="Only used if you switch Network away from host." Type="Port" Display="advanced" Required="false" Mask="false">5004</Config>
-  <Config Name="License public key" Target="TUNAAR_LICENSE_PUBKEY" Default="" Mode="" Description="Optional: your Ed25519 public key (hex) for license validation." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Buy URL" Target="TUNAAR_BUY_URL" Default="" Mode="" Description="Optional: checkout link shown on the dashboard." Type="Variable" Display="advanced" Required="false" Mask="false"/>
 </Container>
