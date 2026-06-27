@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Generate keys and sign Tunaar license tokens (owner-side tool).
 
 Usage:

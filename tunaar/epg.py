@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """XMLTV electronic program guide (EPG) handling.
 
 Fetches an XMLTV document (plain or gzip-compressed), optionally filters it

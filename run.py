@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Entry point for running the Tunaar server."""
 
 from tunaar import APP_NAME, __version__, discovery

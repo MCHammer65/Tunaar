@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Martin Carpenter
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """In-memory log bus powering the admin console's live activity feed.
 
 Tunaar events are published here (also wired into the stdlib ``logging`` via
