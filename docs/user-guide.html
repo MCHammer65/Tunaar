@@ -172,20 +172,13 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
     <div class="note">The optional <b>Force group</b> field overrides every channel's category from that source — handy for keeping providers tidy in Plex (e.g. all Pluto channels under "Pluto TV"). Use <b>Max ch.</b> to cap how many channels a source contributes (great for taming huge lists at the source).</div>
     <div class="note ok">Adding an <b>Xtream-style</b> playlist (<code>…/get.php?username=&amp;password=</code>)? Tunaar auto-detects the matching <code>xmltv.php</code> guide and adds it for you — no need to find the EPG URL.</div>
 
-    <h2 id="presets">Free providers (one click)</h2>
-    <p>Under Sources you'll find a <b>Quick add free providers</b> row. Click a button to add that
-       provider's channels — and its guide is detected automatically. Added ones show a ✓.</p>
-    <table>
-      <tr><th>Region</th><th>Presets</th><th>Guide</th></tr>
-      <tr><td>🇬🇧 UK</td><td>Samsung TV Plus · Pluto TV</td><td>Auto ✓</td></tr>
-      <tr><td>🇺🇸 US</td><td>Samsung TV Plus · Pluto TV</td><td>Auto ✓</td></tr>
-      <tr><td>🇨🇦 Canada</td><td>Samsung TV Plus · Pluto TV</td><td>Auto ✓</td></tr>
-      <tr><td>🇫🇷 France</td><td>Samsung TV Plus · Pluto TV</td><td>Auto ✓</td></tr>
-      <tr><td>🇩🇪 🇪🇸 🇮🇹 🇧🇷 Germany / Spain / Italy / Brazil</td><td>Samsung TV Plus · Pluto TV</td><td>Auto ✓</td></tr>
-      <tr><td>🇦🇺 🇲🇽 Australia / Mexico</td><td>Samsung TV Plus</td><td>Auto ✓</td></tr>
-      <tr><td>🇯🇲 Jamaica</td><td>iptv-org community list</td><td>Limited</td></tr>
-    </table>
-    <div class="note warn">These point at <b>third-party community lists</b>. They're reliable but not guaranteed — paths occasionally change, and the Jamaica (iptv-org) streams are volunteer-maintained with sparse guide data. If a preset adds 0 channels, the source URL is the thing to check.</div>
+    <h2 id="presets">Free country playlists (one click)</h2>
+    <p>Under Sources you'll find a <b>Quick add free country playlists</b> row — one button per country
+       (UK, US, Canada, France, Germany, Spain, Italy, Brazil, Australia, Mexico, Jamaica). Click to add
+       that country's free streams; added ones show a ✓, and clicking again removes them.</p>
+    <div class="note warn">These come from the <b>iptv-org</b> community project — publicly-indexed streams,
+      maintained by volunteers. Coverage and reliability vary, and they don't include a guide, so add an
+      XMLTV guide below and let name-matching fill it in. A dead source is skipped automatically, not fatal.</div>
 
     <h2 id="hdhr">Adding a real HDHomeRun</h2>
     <p>Have a physical HDHomeRun (e.g. for Freeview/OTA)? Let Tunaar absorb it so Plex sees
