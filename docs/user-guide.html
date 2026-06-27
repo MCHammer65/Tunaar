@@ -117,6 +117,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
     <a href="#mapping">Manual EPG mapping</a>
     <a href="#groups">Groups</a>
     <a href="#plex">Add to Plex</a>
+    <a href="#jellyfin">Jellyfin &amp; Emby</a>
     <a href="#streaming">Stream modes</a>
     <a href="#updating">Updating</a>
     <a href="#license">Licensing</a>
@@ -248,7 +249,37 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
       <li><h3>Skip Plex's guide, choose XMLTV</h3><p>When asked for guide data, select <b>"Use an XMLTV guide"</b> and enter <code>http://&lt;host-ip&gt;:5004/epg.xml</code>.</p></li>
       <li><h3>Map &amp; finish</h3><p>Let Plex match channels to the guide, then finish. Your channels appear under Live TV.</p></li>
     </ol>
-    <div class="note ok"><b>One DVR only.</b> Use a single Tunaar DVR with the XMLTV guide. Don't run a second DVR using Plex's own guide alongside it, or the lineups conflict. Emby/Jellyfin work the same way — add Tunaar as an HDHomeRun tuner and point the guide at <code>/epg.xml</code>.</div>
+    <div class="note ok"><b>One DVR only.</b> Use a single Tunaar DVR with the XMLTV guide. Don't run a second DVR using Plex's own guide alongside it, or the lineups conflict.</div>
+
+    <h2 id="jellyfin">Jellyfin &amp; Emby</h2>
+    <p>Tunaar isn't Plex-only. Because it emulates a Silicondust HDHomeRun tuner and serves a standard
+       XMLTV guide, <b>Jellyfin and Emby ingest it natively</b> — the exact same tuner and guide URLs Plex
+       uses. No separate build, no plugin.</p>
+
+    <h3>Jellyfin</h3>
+    <ol class="steps">
+      <li><h3>Add the tuner</h3><p><b>Dashboard → Live TV → Tuner Devices → +</b>. Set <b>Tuner Type</b> to
+        <span class="tag">HDHomeRun</span> and enter <code>http://&lt;host-ip&gt;:5004</code>. Jellyfin
+        auto-discovers it on the same network too.</p></li>
+      <li><h3>Add the guide</h3><p><b>Live TV → TV Guide Data Providers → + → XMLTV</b>. Set the file/URL to
+        <code>http://&lt;host-ip&gt;:5004/epg.xml</code>.</p></li>
+      <li><h3>Map &amp; save</h3><p>Open <b>Live TV → Channels</b>, map any unmatched channels to their guide
+        entry, then save. Run a guide refresh and your channels appear under Live TV.</p></li>
+    </ol>
+
+    <h3>Emby</h3>
+    <ol class="steps">
+      <li><h3>Add the tuner</h3><p><b>Settings → Live TV → TV Sources → Add → HDHomeRun</b>, address
+        <code>http://&lt;host-ip&gt;:5004</code>.</p></li>
+      <li><h3>Add the guide</h3><p><b>Live TV → Guide Data → Add → XMLTV</b>, pointing at
+        <code>http://&lt;host-ip&gt;:5004/epg.xml</code>.</p></li>
+      <li><h3>Map &amp; save</h3><p>Match channels to the guide and save. Refresh guide data to populate.</p></li>
+    </ol>
+
+    <div class="note ok"><b>Same rules as Plex.</b> Use <code>http://&lt;host-ip&gt;:5004</code> for the tuner
+      and append <code>/epg.xml</code> for the guide — always include the <code>:5004</code> port. The
+      "Fix Plex duplicate-description bug" option helps Jellyfin/Emby the same way it helps Plex, since they
+      share the same XMLTV-parsing quirk.</div>
 
     <h2 id="streaming">Stream modes</h2>
     <p>Under the hood Tunaar can deliver streams three ways. The default suits most setups; change it
@@ -304,6 +335,9 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:34px;border-t
     <h3>What about Plex's own free Live TV?</h3>
     <p>That's built into Plex itself and needs no tuner — you'll already see it in the Plex app under
        Live TV. Tunaar is for <em>your</em> playlists and HDHomeRun, which Plex can't show natively.</p>
+    <h3>Does it work with Jellyfin or Emby?</h3>
+    <p>Yes — natively, with no extra setup. Tunaar emulates an HDHomeRun tuner and serves standard XMLTV,
+       which Jellyfin and Emby both ingest exactly like Plex. See <a href="#jellyfin">Jellyfin &amp; Emby</a>.</p>
     <h3>Can I run IPTV and a real aerial together?</h3>
     <p>Yes — that's a headline feature. Add both as sources; Plex sees one unified tuner and one guide.</p>
     <h3>How many channels can I have?</h3>
