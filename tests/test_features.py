@@ -330,8 +330,28 @@ def test_license_active_trial_allows_premium(tmp_path, monkeypatch):
     assert client.post("/api/epg/preset", json={"id": "epg-uk"}).status_code == 200
 
 
-def test_invalid_license_key_rejected(client):
-    assert client.post("/api/license", json={"key": "not.a.key"}).status_code == 400
+def test_invalid_license_key_rejected(client, monkeypatch):
+    # Lemon Squeezy reachable but says the key is invalid → 400.
+    monkeypatch.setattr("tunaar.license.validate_ls",
+                        lambda key, **k: {"reachable": True, "valid": False})
+    assert client.post("/api/license", json={"key": "not-a-key"}).status_code == 400
+
+
+def test_valid_license_key_activates(client, app, monkeypatch):
+    monkeypatch.setattr("tunaar.license.validate_ls", lambda key, **k: {
+        "reachable": True, "valid": True, "plan": "lifetime",
+        "email": "buyer@example.com", "expires_at": None,
+    })
+    r = client.post("/api/license", json={"key": "VALID-KEY"})
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["state"] == "licensed" and body["plan"] == "lifetime"
+    assert app.config["TUNAAR"].license_key == "VALID-KEY"
+
+
+def test_license_key_unreachable_returns_503(client, monkeypatch):
+    monkeypatch.setattr("tunaar.license.validate_ls", lambda key, **k: {"reachable": False})
+    assert client.post("/api/license", json={"key": "x"}).status_code == 503
 
 
 def test_bulk_stream_health_check(client, monkeypatch):

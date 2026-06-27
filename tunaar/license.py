@@ -27,8 +27,15 @@ import binascii
 import json
 import os
 import time
+from datetime import datetime
+
+import requests
 
 from . import _ed25519
+
+# Lemon Squeezy license validation (Option B — no self-hosted key server).
+LS_VALIDATE_URL = "https://api.lemonsqueezy.com/v1/licenses/validate"
+NET_GRACE_DAYS = 14  # keep a known-good license if Lemon Squeezy is unreachable
 
 # Replace with your real public key (hex) for production, or set
 # TUNAAR_LICENSE_PUBKEY. Empty means "no valid licenses" — trial only.
@@ -99,52 +106,72 @@ def verify_key(key: str, public_key_hex: str | None = None) -> dict | None:
     return result
 
 
-def evaluate(license_key: str, trial_start: float, now: float | None = None) -> dict:
-    """Compute the current license state.
+def _parse_expiry(value: str | None) -> float | None:
+    """Parse a Lemon Squeezy ISO-8601 ``expires_at`` to epoch seconds, or None."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except (ValueError, TypeError):
+        return None
 
-    Returns a dict with ``state`` (``licensed`` / ``trial`` / ``expired``),
-    ``plan``, ``email``, ``days_left`` and ``premium`` (whether premium features
-    should be enabled — true for trial and licensed).
+
+def validate_ls(license_key: str, *, timeout: int = 10) -> dict:
+    """Validate a Lemon Squeezy license key against their API.
+
+    Returns a normalized dict. ``reachable`` is False on any network/HTTP error
+    so the caller can apply a grace window; otherwise ``valid`` reflects whether
+    Lemon Squeezy accepts the key.
     """
-    now = time.time() if now is None else now
-    payload = verify_key(license_key) if license_key else None
+    try:
+        resp = requests.post(
+            LS_VALIDATE_URL,
+            data={"license_key": license_key},
+            headers={"Accept": "application/json"},
+            timeout=timeout,
+        )
+        data = resp.json()
+    except Exception:  # noqa: BLE001 - any failure means "couldn't check"
+        return {"reachable": False}
 
-    if payload:
-        exp = payload.get("exp") or 0
-        if not exp or now < exp:
-            days_left = None if not exp else max(0, int((exp - now) / DAY))
-            return {
-                "state": "licensed",
-                "plan": payload.get("plan", "licensed"),
-                "email": payload.get("email", ""),
-                "days_left": days_left,
-                "premium": True,
-            }
-        # Expired annual key: keep working through a short grace window so a
-        # renewal that lands a little late doesn't interrupt the user.
-        if now < exp + GRACE_DAYS * DAY:
-            return {
-                "state": "grace",
-                "plan": payload.get("plan", "licensed"),
-                "email": payload.get("email", ""),
-                "days_left": max(0, int((exp + GRACE_DAYS * DAY - now) / DAY)),
-                "premium": True,
-            }
-        # Fully expired: fall through to trial/expired below.
+    lk = data.get("license_key") or {}
+    meta = data.get("meta") or {}
+    exp = _parse_expiry(lk.get("expires_at"))
+    return {
+        "reachable": True,
+        "valid": bool(data.get("valid")) and lk.get("status") != "disabled",
+        "status": lk.get("status", ""),
+        "email": meta.get("customer_email", ""),
+        "plan": "lifetime" if exp is None else "annual",
+        "expires_at": exp,
+    }
 
+
+def trial_state(trial_start: float, now: float) -> dict:
+    """The (offline) trial/expired state when there's no valid license."""
     trial_end = (trial_start or now) + TRIAL_DAYS * DAY
     if now < trial_end:
+        return {"state": "trial", "plan": "trial", "email": "",
+                "days_left": max(0, int((trial_end - now) / DAY)), "premium": True}
+    return {"state": "expired", "plan": "expired", "email": "",
+            "days_left": 0, "premium": False}
+
+
+def evaluate(ls_result: dict | None, trial_start: float, now: float | None = None) -> dict:
+    """Compute the current license state from a (cached) Lemon Squeezy result.
+
+    ``ls_result`` is the dict from :func:`validate_ls` (or None when there's no
+    key). A valid result yields a ``licensed`` state; otherwise we fall back to
+    the offline trial window.
+    """
+    now = time.time() if now is None else now
+    if ls_result and ls_result.get("valid"):
+        exp = ls_result.get("expires_at")
         return {
-            "state": "trial",
-            "plan": "trial",
-            "email": "",
-            "days_left": max(0, int((trial_end - now) / DAY)),
+            "state": "licensed",
+            "plan": ls_result.get("plan", "licensed"),
+            "email": ls_result.get("email", ""),
+            "days_left": None if exp is None else max(0, int((exp - now) / DAY)),
             "premium": True,
         }
-    return {
-        "state": "expired",
-        "plan": "expired",
-        "email": "",
-        "days_left": 0,
-        "premium": False,
-    }
+    return trial_state(trial_start, now)
