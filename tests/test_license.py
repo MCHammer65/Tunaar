@@ -38,6 +38,23 @@ def test_validate_ls_valid_lifetime(monkeypatch):
     assert res["email"] == "a@b.com"
 
 
+def test_activate_ls_success_and_limit(monkeypatch):
+    monkeypatch.setattr(lic.requests, "post", lambda *a, **k: _Resp({
+        "activated": True, "error": None,
+        "license_key": {"status": "active", "expires_at": None},
+        "instance": {"id": "inst-9"}, "meta": {"customer_email": "a@b.com"},
+    }))
+    res = lic.activate_ls("KEY", "My Device")
+    assert res["valid"] and res["instance_id"] == "inst-9" and res["plan"] == "lifetime"
+    # Activation limit reached → not valid, error surfaced.
+    monkeypatch.setattr(lic.requests, "post", lambda *a, **k: _Resp({
+        "activated": False, "error": "This license key has reached the activation limit.",
+        "license_key": {"status": "active"}, "instance": None, "meta": {},
+    }))
+    res2 = lic.activate_ls("KEY", "Device 3")
+    assert res2["valid"] is False and "activation limit" in res2["error"]
+
+
 def test_validate_ls_annual_expiry(monkeypatch):
     monkeypatch.setattr(lic.requests, "post",
                         lambda *a, **k: _Resp(_ls_response(expires_at="2030-01-01T00:00:00Z")))

@@ -49,7 +49,8 @@ DEFAULTS: dict = {
     "discovery": True,  # answer HDHomeRun discovery so Plex auto-finds the tuner
     "discovery_port": 65001,
     "setup_complete": False,  # first-run wizard shown until dismissed/finished
-    "license_key": "",  # Ed25519-signed license token (empty = trial/unlicensed)
+    "license_key": "",  # Lemon Squeezy license key (empty = trial/unlicensed)
+    "license_instance_id": "",  # LS activation instance id for this install
     "trial_start": 0.0,  # unix timestamp of first run; seeds the 30-day trial
     "license_enforce": "nag",  # "nag" (banner only) | "premium" (gate extras)
     "buy_url": "",  # checkout link shown on the dashboard "Buy a license" button
@@ -116,6 +117,7 @@ class Config:
     discovery_port: int = DEFAULTS["discovery_port"]
     setup_complete: bool = DEFAULTS["setup_complete"]
     license_key: str = DEFAULTS["license_key"]
+    license_instance_id: str = DEFAULTS["license_instance_id"]
     trial_start: float = DEFAULTS["trial_start"]
     license_enforce: str = DEFAULTS["license_enforce"]
     buy_url: str = DEFAULTS["buy_url"]
