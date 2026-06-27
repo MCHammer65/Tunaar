@@ -331,26 +331,31 @@ def test_license_active_trial_allows_premium(tmp_path, monkeypatch):
 
 
 def test_invalid_license_key_rejected(client, monkeypatch):
-    # Lemon Squeezy reachable but says the key is invalid → 400.
-    monkeypatch.setattr("tunaar.license.validate_ls",
-                        lambda key, **k: {"reachable": True, "valid": False})
-    assert client.post("/api/license", json={"key": "not-a-key"}).status_code == 400
+    # Reachable but Lemon Squeezy rejects the key (e.g. activation limit) → 400.
+    monkeypatch.setattr("tunaar.license.activate_ls", lambda key, name, **k: {
+        "reachable": True, "valid": False,
+        "error": "This license key has reached the activation limit.",
+    })
+    r = client.post("/api/license", json={"key": "not-a-key"})
+    assert r.status_code == 400
+    assert "activation limit" in r.get_json()["message"]
 
 
 def test_valid_license_key_activates(client, app, monkeypatch):
-    monkeypatch.setattr("tunaar.license.validate_ls", lambda key, **k: {
+    monkeypatch.setattr("tunaar.license.activate_ls", lambda key, name, **k: {
         "reachable": True, "valid": True, "plan": "lifetime",
-        "email": "buyer@example.com", "expires_at": None,
+        "email": "buyer@example.com", "expires_at": None, "instance_id": "inst-123",
     })
     r = client.post("/api/license", json={"key": "VALID-KEY"})
     assert r.status_code == 200
     body = r.get_json()
     assert body["state"] == "licensed" and body["plan"] == "lifetime"
     assert app.config["TUNAAR"].license_key == "VALID-KEY"
+    assert app.config["TUNAAR"].license_instance_id == "inst-123"
 
 
 def test_license_key_unreachable_returns_503(client, monkeypatch):
-    monkeypatch.setattr("tunaar.license.validate_ls", lambda key, **k: {"reachable": False})
+    monkeypatch.setattr("tunaar.license.activate_ls", lambda key, name, **k: {"reachable": False})
     assert client.post("/api/license", json={"key": "x"}).status_code == 503
 
 

@@ -171,7 +171,7 @@ class LicenseCache:
         with self._lock:
             stale = (now - self._checked_at) > self.REVALIDATE
             if self._result is None or stale:
-                res = licensing.validate_ls(key)
+                res = licensing.validate_ls(key, cfg.license_instance_id)
                 self._checked_at = now
                 if res.get("reachable"):
                     self._result = res
@@ -685,18 +685,26 @@ def create_app(config: Config | None = None) -> Flask:
         body = request.get_json(silent=True) or {}
         key = (body.get("key") or "").strip()
         if key:
-            # Validate against Lemon Squeezy before saving, for instant feedback.
-            res = licensing.validate_ls(key)
+            if key == config.license_key and config.license_instance_id:
+                # Re-checking the same key on this install: revalidate, don't
+                # burn another activation.
+                res = licensing.validate_ls(key, config.license_instance_id)
+            else:
+                # New key/install: activate it (consumes one of its activations).
+                res = licensing.activate_ls(key, config.friendly_name + " " + config.device_id)
             if not res.get("reachable"):
                 return jsonify({"error": "unreachable",
                                 "message": "Couldn't reach Lemon Squeezy — check your connection and try again."}), 503
             if not res.get("valid"):
-                return jsonify({"error": "invalid",
-                                "message": "That license key isn't valid or is inactive."}), 400
+                msg = res.get("error") or "That license key isn't valid or is inactive."
+                return jsonify({"error": "invalid", "message": msg}), 400
             config.license_key = key
+            if res.get("instance_id"):
+                config.license_instance_id = res["instance_id"]
             licenses.prime(res)
         else:
             config.license_key = ""
+            config.license_instance_id = ""
             licenses.invalidate()
         try:
             config.save()
